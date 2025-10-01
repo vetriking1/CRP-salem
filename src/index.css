@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Compliance First Brand Colors - Professional CRM/ERP Design */
+    --background: 0 0% 100%;
+    --foreground: 200 85% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 85% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 85% 15%;
+
+    /* Primary: Deep Corporate Blue from CF Logo */
+    --primary: 200 80% 25%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 200 80% 30%;
+
+    /* Secondary: Light Blue Tints */
+    --secondary: 200 40% 96%;
+    --secondary-foreground: 200 80% 25%;
+
+    /* Accent: Fresh Green from CF Logo */
+    --accent: 110 50% 50%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 110 50% 45%;
+
+    /* Muted for subtle elements */
+    --muted: 200 20% 96%;
+    --muted-foreground: 200 20% 45%;
+
+    /* Success (using green accent) */
+    --success: 110 50% 50%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning */
+    --warning: 45 90% 55%;
+    --warning-foreground: 200 85% 15%;
+
+    /* Destructive */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders and inputs */
+    --border: 200 20% 90%;
+    --input: 200 20% 90%;
+    --ring: 200 80% 25%;
+
+    --radius: 0.5rem;
+
+    /* Shadows for depth */
+    --shadow-sm: 0 1px 2px 0 hsl(200 80% 25% / 0.05);
+    --shadow: 0 4px 6px -1px hsl(200 80% 25% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(200 80% 25% / 0.15);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 200 85% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 200 85% 10%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 200 85% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 200 80% 40%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 200 80% 45%;
+
+    --secondary: 200 40% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --accent: 110 50% 45%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 110 50% 40%;
+
+    --muted: 200 40% 15%;
+    --muted-foreground: 200 20% 65%;
+
+    --success: 110 50% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 45 90% 50%;
+    --warning-foreground: 200 85% 8%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 200 40% 20%;
+    --input: 200 40% 20%;
+    --ring: 200 80% 40%;
+
+    --sidebar-background: 200 85% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 200 80% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 200 40% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 200 40% 20%;
+    --sidebar-ring: 200 80% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
