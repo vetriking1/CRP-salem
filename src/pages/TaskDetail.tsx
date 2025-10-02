@@ -13,6 +13,8 @@ import {
   Space,
   Divider,
   Spin,
+  Modal,
+  Select,
 } from "antd";
 import {
   ArrowLeftOutlined,
@@ -45,6 +47,14 @@ export default function TaskDetail() {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [isAssigned, setIsAssigned] = useState(false);
+  type PendingReason = "review" | "data_missing" | "clarity_needed";
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
+  const [pendingReason, setPendingReason] = useState<
+    PendingReason | undefined
+  >();
+  const [pendingNotes, setPendingNotes] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+  const [dataFiles, setDataFiles] = useState<FileList | null>(null);
 
   useEffect(() => {
     fetchTaskDetails();
@@ -204,6 +214,314 @@ export default function TaskDetail() {
     }
   };
 
+  const allSubtasksCompleted =
+    subtasks.length === 0 || subtasks.every((s) => s.is_done);
+
+  const handleMarkCompleted = async () => {
+    if (!isAssigned) {
+      toast({
+        title: "Not Authorized",
+        description: "Only assigned users can complete the task",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!allSubtasksCompleted) {
+      toast({
+        title: "Cannot Complete",
+        description: "Please complete all subtasks first",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          pending_reason: null,
+          pending_notes: null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+      toast({ title: "Success", description: "Task marked as completed" });
+      fetchTaskDetails();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const setActiveAssignmentsFalse = async (taskId: string) => {
+    await supabase
+      .from("task_assignments")
+      .update({ is_active: false })
+      .eq("task_id", taskId)
+      .eq("is_active", true);
+  };
+
+  const autoAssignForPending = async (
+    taskId: string,
+    teamId: string | null,
+    reason: string
+  ) => {
+    if (!teamId) return;
+    try {
+      // Try manager first for review/other
+      let targetUserId: string | null = null;
+
+      const { data: team } = await supabase
+        .from("teams")
+        .select("id, manager_id")
+        .eq("id", teamId)
+        .single();
+
+      if (reason === "review") {
+        if (team?.manager_id) targetUserId = team.manager_id as string;
+        if (!targetUserId) {
+          // find any manager in team
+          const { data: teamMemberIds } = await supabase
+            .from("team_members")
+            .select("user_id")
+            .eq("team_id", teamId);
+          const userIds = (teamMemberIds || []).map((m: any) => m.user_id);
+          if (userIds.length > 0) {
+            const { data: managers } = await supabase
+              .from("users")
+              .select("id")
+              .in("id", userIds)
+              .eq("role", "manager");
+            if (managers && managers.length > 0) targetUserId = managers[0].id;
+          }
+        }
+      } else if (reason === "data_missing") {
+        const { data: teamMemberIds } = await supabase
+          .from("team_members")
+          .select("user_id")
+          .eq("team_id", teamId);
+        const userIds = (teamMemberIds || []).map((m: any) => m.user_id);
+        if (userIds.length > 0) {
+          const { data: collectors } = (await supabase
+            .from("users")
+            .select("id, specialty, role")
+            .in("id", userIds)
+            .or("role.eq.data_collector,specialty.ilike.%data%")) as any;
+          if (collectors && collectors.length > 0)
+            targetUserId = collectors[0].id;
+        }
+      }
+
+      // Fallback: least busy active team member
+      if (!targetUserId) {
+        const { data: memberRows } = await supabase
+          .from("team_members")
+          .select("user_id")
+          .eq("team_id", teamId);
+        const userIds = (memberRows || []).map((m: any) => m.user_id);
+        if (userIds.length > 0) {
+          const { data: usersData } = await supabase
+            .from("users")
+            .select("id, current_workload_hours, is_active")
+            .in("id", userIds)
+            .eq("is_active", true);
+          const { data: assignmentsData } = await supabase
+            .from("task_assignments")
+            .select("user_id")
+            .eq("is_active", true)
+            .in("user_id", userIds);
+          const assignmentCounts: Record<string, number> = {};
+          (assignmentsData || []).forEach((a: any) => {
+            assignmentCounts[a.user_id] =
+              (assignmentCounts[a.user_id] || 0) + 1;
+          });
+          let bestUserId: string | null = null;
+          let bestScore = Number.POSITIVE_INFINITY;
+          (usersData || []).forEach((u: any) => {
+            const current = Number(u.current_workload_hours || 0) || 0;
+            const assigns = assignmentCounts[u.id] || 0;
+            const score = current + assigns;
+            if (score < bestScore) {
+              bestScore = score;
+              bestUserId = u.id;
+            }
+          });
+          targetUserId = bestUserId;
+        }
+      }
+
+      if (targetUserId && userProfile?.id) {
+        await setActiveAssignmentsFalse(taskId);
+        await supabase.from("task_assignments").insert({
+          task_id: taskId,
+          user_id: targetUserId,
+          assigned_by: userProfile.id,
+          is_active: true,
+        });
+      }
+    } catch (e) {
+      console.error("Auto-assign pending failed", e);
+    }
+  };
+
+  const handleConfirmPending = async () => {
+    if (!isAssigned) {
+      toast({
+        title: "Not Authorized",
+        description: "Only assigned users can update status",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!pendingReason) {
+      toast({ title: "Missing Reason", description: "Select a reason" });
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          status: "pending",
+          pending_reason: pendingReason,
+          pending_notes: pendingNotes || null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+
+      await autoAssignForPending(
+        String(id),
+        task?.team_id || null,
+        pendingReason
+      );
+
+      toast({ title: "Updated", description: "Task set to pending" });
+      setPendingModalOpen(false);
+      setPendingReason(undefined);
+      setPendingNotes("");
+      fetchTaskDetails();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResumeFromPending = async () => {
+    if (!isAssigned) {
+      toast({
+        title: "Not Authorized",
+        description: "Only assigned users can resume the task",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const previous = {
+        status: task.status,
+        pending_reason: task.pending_reason,
+        pending_notes: task.pending_notes,
+      };
+      // 1) Fetch all assignments (latest first)
+      const { data: assignments, error: fetchAssignErr } = await supabase
+        .from("task_assignments")
+        .select("id, user_id, assigned_at, is_active")
+        .eq("task_id", id)
+        .order("assigned_at", { ascending: false });
+      if (fetchAssignErr) throw fetchAssignErr;
+
+      const currentActive = (assignments || []).find((a: any) => a.is_active);
+      const previousAssignee = (assignments || []).find(
+        (a: any) =>
+          !a.is_active && (!currentActive || a.id !== currentActive.id)
+      );
+
+      // 2) Deactivate current active (the pending assignee)
+      if (currentActive) {
+        await supabase
+          .from("task_assignments")
+          .update({ is_active: false })
+          .eq("id", currentActive.id);
+      }
+
+      // 3) Reactivate previous assignee if exists
+      if (previousAssignee) {
+        await supabase
+          .from("task_assignments")
+          .update({ is_active: true })
+          .eq("id", previousAssignee.id);
+      }
+
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          status: "in_progress",
+          pending_reason: null,
+          pending_notes: null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+
+      // Add task history entry
+      await supabase.from("task_history").insert({
+        task_id: id,
+        user_id: userProfile?.id,
+        action: "resume_from_pending",
+        old_value: { ...previous, removed_user_id: currentActive?.user_id },
+        new_value: {
+          status: "in_progress",
+          restored_user_id: previousAssignee?.user_id || null,
+        },
+        notes: "Task resumed from pending; assignment reverted",
+      });
+
+      toast({ title: "Resumed", description: "Task moved to In Progress" });
+      fetchTaskDetails();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDataFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) setDataFiles(e.target.files);
+  };
+
+  const handleUploadDataFiles = async () => {
+    if (!dataFiles || dataFiles.length === 0) return;
+    if (!userProfile?.id) return;
+    setUploading(true);
+    try {
+      for (let i = 0; i < dataFiles.length; i++) {
+        const file = dataFiles[i];
+        const ext = file.name.split(".").pop();
+        const path = `${userProfile.id}/${id}/${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("task-attachments")
+          .upload(path, file);
+        if (uploadError) throw uploadError;
+        await supabase.from("attachments").insert({
+          task_id: id,
+          file_name: file.name,
+          file_path: path,
+          file_type: file.type,
+          file_size: file.size,
+          uploaded_by: userProfile.id,
+        });
+      }
+      toast({ title: "Uploaded", description: "Files uploaded" });
+      setDataFiles(null);
+      fetchTaskDetails();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleDownloadAttachment = async (
     filePath: string,
     fileName: string
@@ -300,6 +618,25 @@ export default function TaskDetail() {
             </div>
           </div>
         </div>
+        {isAssigned && (
+          <Space>
+            <Button
+              type="primary"
+              disabled={!allSubtasksCompleted}
+              onClick={handleMarkCompleted}
+            >
+              Mark Completed
+            </Button>
+            <Button onClick={() => setPendingModalOpen(true)}>
+              Set Pending
+            </Button>
+            {task.status === "pending" && (
+              <Button onClick={() => handleResumeFromPending()}>
+                Resume Task
+              </Button>
+            )}
+          </Space>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -332,6 +669,16 @@ export default function TaskDetail() {
               <Descriptions.Item label="Description" span={2}>
                 {task.description || "No description"}
               </Descriptions.Item>
+              {task.pending_reason && (
+                <Descriptions.Item label="Pending Reason">
+                  {String(task.pending_reason)}
+                </Descriptions.Item>
+              )}
+              {task.pending_notes && (
+                <Descriptions.Item label="Pending Notes" span={2}>
+                  {task.pending_notes}
+                </Descriptions.Item>
+              )}
             </Descriptions>
           </Card>
 
@@ -504,9 +851,57 @@ export default function TaskDetail() {
                 </List.Item>
               )}
             />
+            {userProfile?.role === "data_collector" && (
+              <div className="mt-4 space-y-3">
+                <Divider />
+                <div className="text-sm font-medium">Upload Data Files</div>
+                <input type="file" multiple onChange={handleDataFilesChange} />
+                <Button
+                  type="primary"
+                  onClick={handleUploadDataFiles}
+                  disabled={uploading || !dataFiles || dataFiles.length === 0}
+                >
+                  {uploading ? "Uploading..." : "Upload"}
+                </Button>
+              </div>
+            )}
           </Card>
         </div>
       </div>
+
+      <Modal
+        title="Set Task to Pending"
+        open={pendingModalOpen}
+        onOk={handleConfirmPending}
+        onCancel={() => setPendingModalOpen(false)}
+        okText="Confirm"
+      >
+        <Space direction="vertical" className="w-full">
+          <div>
+            <div className="mb-1">Reason</div>
+            <Select
+              className="w-full"
+              placeholder="Select reason"
+              value={pendingReason}
+              onChange={(v) => setPendingReason(v)}
+              options={[
+                { label: "Review", value: "review" },
+                { label: "Data Missing", value: "data_missing" },
+                { label: "Clarity Needed", value: "clarity_needed" },
+              ]}
+            />
+          </div>
+          <div>
+            <div className="mb-1">Notes</div>
+            <TextArea
+              value={pendingNotes}
+              onChange={(e) => setPendingNotes(e.target.value)}
+              placeholder="Add details for pending"
+              autoSize={{ minRows: 3, maxRows: 6 }}
+            />
+          </div>
+        </Space>
+      </Modal>
     </div>
   );
 }
