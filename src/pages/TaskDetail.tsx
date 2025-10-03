@@ -57,6 +57,12 @@ export default function TaskDetail() {
   const [pendingNotes, setPendingNotes] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [dataFiles, setDataFiles] = useState<FileList | null>(null);
+  
+  // Review workflow states
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState<string>("");
+  const [changeRequestModalOpen, setChangeRequestModalOpen] = useState(false);
+  const [changeRequestNotes, setChangeRequestNotes] = useState<string>("");
 
   useEffect(() => {
     fetchTaskDetails();
@@ -151,6 +157,7 @@ export default function TaskDetail() {
     }
 
     try {
+      // Update subtask status
       const { error } = await supabase
         .from("subtasks")
         .update({
@@ -161,6 +168,30 @@ export default function TaskDetail() {
         .eq("id", subtaskId);
 
       if (error) throw error;
+
+      // If task status is "assigned", update it to "in_progress"
+      if (task.status === "assigned" || "not_started") {
+        const { error: taskUpdateError } = await supabase
+          .from("tasks")
+          .update({
+            status: "in_progress",
+          })
+          .eq("id", id);
+        
+        if (taskUpdateError) throw taskUpdateError;
+        
+        // Send notifications to all assigned users and task creator
+        const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
+        const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
+        
+        await NotificationService.notifyTaskStatusChange(
+          task.id,
+          task.title,
+          "assigned",
+          "in_progress",
+          allNotifyUsers.filter((userId) => userId !== userProfile?.id)
+        );
+      }
 
       toast({
         title: "Success",
@@ -237,10 +268,11 @@ export default function TaskDetail() {
       return;
     }
     try {
+      // Instead of marking as completed directly, mark for review
       const { error } = await supabase
         .from("tasks")
         .update({
-          status: "completed",
+          status: "review",
           completed_at: new Date().toISOString(),
           pending_reason: null,
           pending_notes: null,
@@ -248,19 +280,261 @@ export default function TaskDetail() {
         .eq("id", id);
       if (error) throw error;
 
+      // Auto-assign to a senior or manager for review
+      await assignForReview(String(id), task?.team_id || null);
+
       // Send notifications to all assigned users and task creator
-      const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
+      const assignedUsers =
+        task.task_assignments?.map((a: any) => a.user_id) || [];
       const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
-      
+
       await NotificationService.notifyTaskStatusChange(
         task.id,
         task.title,
         task.status,
-        'completed',
-        allNotifyUsers.filter(userId => userId !== userProfile?.id)
+        "review",
+        allNotifyUsers.filter((userId) => userId !== userProfile?.id)
       );
 
-      toast({ title: "Success", description: "Task marked as completed" });
+      toast({ title: "Success", description: "Task submitted for review" });
+      fetchTaskDetails();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Function to assign task to a senior or manager for review
+  const assignForReview = async (taskId: string, teamId: string | null) => {
+    if (!userProfile?.id || !teamId) return;
+    
+    try {
+      // Store the current assignee before deactivating
+      const { data: currentAssignments } = await supabase
+        .from("task_assignments")
+        .select("user_id")
+        .eq("task_id", taskId)
+        .eq("is_active", true);
+        
+      const currentAssigneeId = currentAssignments && currentAssignments.length > 0 
+        ? currentAssignments[0].user_id 
+        : null;
+      
+      // Deactivate current assignments
+      await supabase
+        .from("task_assignments")
+        .update({ is_active: false })
+        .eq("task_id", taskId)
+        .eq("is_active", true);
+      
+      // Store the original assignee in task metadata
+      await supabase
+        .from("tasks")
+        .update({ 
+          metadata: { 
+            original_assignee: currentAssigneeId,
+            review_requested_at: new Date().toISOString()
+          } 
+        })
+        .eq("id", taskId);
+      
+      // Use AutoAssignmentService to find a reviewer
+      const assignmentResult = await AutoAssignmentService.assignForPending(
+        taskId,
+        teamId,
+        "review", // Use the existing review assignment logic
+        userProfile.id
+      );
+
+      if (!assignmentResult.success) {
+        console.warn("Review assignment failed:", assignmentResult.error);
+      }
+    } catch (e) {
+      console.error("Auto-assign for review failed", e);
+    }
+  };
+  
+  // Function to mark review as complete
+  const handleReviewDone = async () => {
+    if (!isAssigned) {
+      toast({
+        title: "Not Authorized",
+        description: "Only assigned reviewers can approve tasks",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      // Update task status to completed
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          status: "completed",
+        })
+        .eq("id", id);
+      if (error) throw error;
+      
+      // Send notifications to all assigned users and task creator
+      const assignedUsers =
+        task.task_assignments?.map((a: any) => a.user_id) || [];
+      const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
+
+      await NotificationService.notifyTaskStatusChange(
+        task.id,
+        task.title,
+        "review",
+        "completed",
+        allNotifyUsers.filter((userId) => userId !== userProfile?.id)
+      );
+      
+      toast({ title: "Success", description: "Review completed and task marked as done" });
+      setReviewModalOpen(false);
+      setReviewNotes("");
+      fetchTaskDetails();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Function to request changes after review
+  const handleRequestChanges = async () => {
+    if (!isAssigned) {
+      toast({
+        title: "Not Authorized",
+        description: "Only assigned reviewers can request changes",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!changeRequestNotes.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please specify what changes are needed",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      // Get the original assignee from task metadata
+      const { data: taskData } = await supabase
+        .from("tasks")
+        .select("metadata")
+        .eq("id", id)
+        .single();
+      
+      const originalAssigneeId = taskData?.metadata?.original_assignee;
+      
+      if (!originalAssigneeId) {
+        toast({
+          title: "Error",
+          description: "Could not find the original assignee",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Deactivate current assignments (reviewer)
+      await supabase
+        .from("task_assignments")
+        .update({ is_active: false })
+        .eq("task_id", id)
+        .eq("is_active", true);
+      
+      // Create new assignment for the original assignee
+      await supabase
+        .from("task_assignments")
+        .insert({
+          task_id: id,
+          user_id: originalAssigneeId,
+          assigned_by: userProfile?.id,
+          is_active: true,
+        });
+      
+      // Add the change request as a subtask
+      await supabase
+        .from("subtasks")
+        .insert({
+          task_id: id,
+          title: `Review changes: ${changeRequestNotes}`,
+          description: `Changes requested by ${userProfile?.full_name} on ${new Date().toLocaleDateString()}`,
+          is_done: false,
+          sort_order: (subtasks.length + 1) * 10,
+        });
+      
+      // Update task status back to in_progress
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          status: "in_progress",
+        })
+        .eq("id", id);
+      if (error) throw error; 
+      
+      // Send notifications
+      await NotificationService.notifyTaskStatusChange(
+        task.id,
+        task.title,
+        "review",
+        "in_progress",
+        [originalAssigneeId]
+      );
+      
+      toast({ title: "Success", description: "Changes requested and task reassigned" });
+      setChangeRequestModalOpen(false);
+      setChangeRequestNotes("");
+      fetchTaskDetails();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePaymentCompleted = async () => {
+    if (!isAssigned) {
+      toast({
+        title: "Not Authorized",
+        description: "Only assigned users can mark payment as completed",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          status: "delivered",
+        })
+        .eq("id", id);
+      if (error) throw error;
+
+      // Send notifications to all assigned users and task creator
+      const assignedUsers =
+        task.task_assignments?.map((a: any) => a.user_id) || [];
+      const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
+
+      await NotificationService.notifyTaskStatusChange(
+        task.id,
+        task.title,
+        "completed",
+        "delivered",
+        allNotifyUsers.filter((userId) => userId !== userProfile?.id)
+      );
+
+      toast({ title: "Success", description: "Payment completed and task delivered" });
       fetchTaskDetails();
     } catch (error: any) {
       toast({
@@ -284,17 +558,44 @@ export default function TaskDetail() {
     teamId: string | null,
     reason: string
   ) => {
-    if (!teamId || !userProfile?.id) return;
+    if (!userProfile?.id) return;
+    
     try {
-      const assignmentResult = await AutoAssignmentService.assignForPending(
-        taskId,
-        teamId,
-        reason,
-        userProfile.id
-      );
-      
-      if (!assignmentResult.success) {
-        console.warn("Pending assignment failed:", assignmentResult.error);
+      // For data_missing pending reason, assign to the task creator
+      if (reason === "data_missing" && task.created_by) {
+        // Deactivate current assignments
+        await supabase
+          .from("task_assignments")
+          .update({ is_active: false })
+          .eq("task_id", taskId)
+          .eq("is_active", true);
+          
+        // Create new assignment for the task creator
+        const { error: assignError } = await supabase
+          .from("task_assignments")
+          .insert({
+            task_id: taskId,
+            user_id: task.created_by,
+            assigned_by: userProfile.id,
+            is_active: true,
+          });
+          
+        if (assignError) throw assignError;
+        
+        console.log(`Task assigned to creator (${task.created_by}) for data collection`);
+      } 
+      // For review and clarity_needed, use the AutoAssignmentService
+      else if (teamId) {
+        const assignmentResult = await AutoAssignmentService.assignForPending(
+          taskId,
+          teamId,
+          reason,
+          userProfile.id
+        );
+
+        if (!assignmentResult.success) {
+          console.warn("Pending assignment failed:", assignmentResult.error);
+        }
       }
     } catch (e) {
       console.error("Auto-assign pending failed", e);
@@ -332,15 +633,16 @@ export default function TaskDetail() {
       );
 
       // Send notifications to task creator and team managers
-      const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
+      const assignedUsers =
+        task.task_assignments?.map((a: any) => a.user_id) || [];
       const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
-      
+
       await NotificationService.notifyTaskStatusChange(
         task.id,
         task.title,
         task.status,
-        'pending',
-        allNotifyUsers.filter(userId => userId !== userProfile?.id)
+        "pending",
+        allNotifyUsers.filter((userId) => userId !== userProfile?.id)
       );
 
       toast({ title: "Updated", description: "Task set to pending" });
@@ -372,6 +674,7 @@ export default function TaskDetail() {
         pending_reason: task.pending_reason,
         pending_notes: task.pending_notes,
       };
+      
       // 1) Fetch all assignments (latest first)
       const { data: assignments, error: fetchAssignErr } = await supabase
         .from("task_assignments")
@@ -380,64 +683,131 @@ export default function TaskDetail() {
         .order("assigned_at", { ascending: false });
       if (fetchAssignErr) throw fetchAssignErr;
 
+      // Find the current active assignment (the pending assignee)
       const currentActive = (assignments || []).find((a: any) => a.is_active);
-      const previousAssignee = (assignments || []).find(
-        (a: any) =>
-          !a.is_active && (!currentActive || a.id !== currentActive.id)
-      );
-
-      // 2) Deactivate current active (the pending assignee)
-      if (currentActive) {
+      
+      // Find the original assignee (the one before the pending assignee)
+      // We need to find the most recent non-active assignment that isn't the current active one
+      const originalAssignee = (assignments || [])
+        .filter((a: any) => !a.is_active)
+        .sort((a: any, b: any) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime())[0];
+      
+      // For data_missing pending reason, completely remove all assignments
+      if (task.pending_reason === "data_missing") {
+        // Deactivate ALL assignments for this task
         await supabase
           .from("task_assignments")
           .update({ is_active: false })
-          .eq("id", currentActive.id);
-      }
-
-      // 3) Reactivate previous assignee if exists
-      if (previousAssignee) {
+          .eq("task_id", id);
+        
+        // Update task status to not_started since no one is assigned
+        const { error } = await supabase
+          .from("tasks")
+          .update({
+            status: "not_started",
+            pending_reason: null,
+            pending_notes: null,
+          })
+          .eq("id", id);
+        if (error) throw error;
+        
+        // Add task history entry
+        await supabase.from("task_history").insert({
+          task_id: id,
+          user_id: userProfile?.id,
+          action: "resume_from_pending",
+          old_value: { ...previous, removed_user_id: currentActive?.user_id },
+          new_value: {
+            status: "not_started",
+            restored_user_id: null,
+          },
+          notes: "Task resumed from data collection; all assignments removed",
+        });
+      } 
+      // For other pending reasons (review, clarity_needed), restore only the original assignee
+      else {
+        // Deactivate ALL assignments for this task first
         await supabase
           .from("task_assignments")
-          .update({ is_active: true })
-          .eq("id", previousAssignee.id);
+          .update({ is_active: false })
+          .eq("task_id", id);
+
+        // If there was an original assignee, reactivate only that one
+        if (originalAssignee) {
+          await supabase
+            .from("task_assignments")
+            .update({ is_active: true })
+            .eq("id", originalAssignee.id);
+            
+          // Update task status to in_progress
+          const { error } = await supabase
+            .from("tasks")
+            .update({
+              status: "in_progress",
+              pending_reason: null,
+              pending_notes: null,
+            })
+            .eq("id", id);
+          if (error) throw error;
+            
+          // Add task history entry
+          await supabase.from("task_history").insert({
+            task_id: id,
+            user_id: userProfile?.id,
+            action: "resume_from_pending",
+            old_value: { ...previous, removed_user_id: currentActive?.user_id },
+            new_value: {
+              status: "in_progress",
+              restored_user_id: originalAssignee?.user_id || null,
+            },
+            notes: "Task resumed from pending; original assignee restored",
+          });
+        } else {
+          // No original assignee found, set to not_started
+          const { error } = await supabase
+            .from("tasks")
+            .update({
+              status: "not_started",
+              pending_reason: null,
+              pending_notes: null,
+            })
+            .eq("id", id);
+          if (error) throw error;
+            
+          // Add task history entry
+          await supabase.from("task_history").insert({
+            task_id: id,
+            user_id: userProfile?.id,
+            action: "resume_from_pending",
+            old_value: { ...previous, removed_user_id: currentActive?.user_id },
+            new_value: {
+              status: "not_started",
+              restored_user_id: null,
+            },
+            notes: "Task resumed from pending; no original assignee found",
+          });
+        }
       }
 
-      const { error } = await supabase
-        .from("tasks")
-        .update({
-          status: "in_progress",
-          pending_reason: null,
-          pending_notes: null,
-        })
-        .eq("id", id);
-      if (error) throw error;
-
-      // Add task history entry
-      await supabase.from("task_history").insert({
-        task_id: id,
-        user_id: userProfile?.id,
-        action: "resume_from_pending",
-        old_value: { ...previous, removed_user_id: currentActive?.user_id },
-        new_value: {
-          status: "in_progress",
-          restored_user_id: previousAssignee?.user_id || null,
-        },
-        notes: "Task resumed from pending; assignment reverted",
-      });
-
       // Send notifications about status change
-      const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
+      const assignedUsers =
+        task.task_assignments?.map((a: any) => a.user_id) || [];
       const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
-      
+
       await NotificationService.notifyTaskStatusChange(
         task.id,
         task.title,
-        'pending',
-        'in_progress',
-        allNotifyUsers.filter(userId => userId !== userProfile?.id)
+        "pending",
+        task.pending_reason === "data_missing" ? "not_started" : "in_progress",
+        allNotifyUsers.filter((userId) => userId !== userProfile?.id)
       );
 
-      toast({ title: "Resumed", description: "Task moved to In Progress" });
+      toast({ 
+        title: "Resumed", 
+        description: task.pending_reason === "data_missing" 
+          ? "Task moved to Not Started and unassigned" 
+          : "Task moved to In Progress" 
+      });
       fetchTaskDetails();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -578,16 +948,35 @@ export default function TaskDetail() {
         </div>
         {isAssigned && (
           <Space>
-            <Button
-              type="primary"
-              disabled={!allSubtasksCompleted}
-              onClick={handleMarkCompleted}
-            >
-              Mark Completed
-            </Button>
-            <Button onClick={() => setPendingModalOpen(true)}>
-              Set Pending
-            </Button>
+            {task.status === "in_progress" && (
+              <Button
+                type="primary"
+                disabled={!allSubtasksCompleted}
+                onClick={handleMarkCompleted}
+              >
+                Mark Completed
+              </Button>
+            )}
+            {task.status === "review" && (
+              <>
+                <Button type="primary" onClick={() => setReviewModalOpen(true)}>
+                  Review Done
+                </Button>
+                <Button onClick={() => setChangeRequestModalOpen(true)}>
+                  Request Changes
+                </Button>
+              </>
+            )}
+            {task.status === "completed" && (
+              <Button type="primary" onClick={handlePaymentCompleted}>
+                Payment Done
+              </Button>
+            )}
+            {![ "pending", "review", "completed", "delivered"].includes(task.status) && (
+              <Button onClick={() => setPendingModalOpen(true)}>
+                Set Pending
+              </Button>
+            )}
             {task.status === "pending" && (
               <Button onClick={() => handleResumeFromPending()}>
                 Resume Task
@@ -856,6 +1245,49 @@ export default function TaskDetail() {
               onChange={(e) => setPendingNotes(e.target.value)}
               placeholder="Add details for pending"
               autoSize={{ minRows: 3, maxRows: 6 }}
+            />
+          </div>
+        </Space>
+      </Modal>
+      
+      {/* Review Done Modal */}
+      <Modal
+        title="Complete Review"
+        open={reviewModalOpen}
+        onOk={handleReviewDone}
+        onCancel={() => setReviewModalOpen(false)}
+        okText="Mark as Completed"
+      >
+        {/* <Space direction="vertical" className="w-full">
+          <div>
+            <div className="mb-1">Review Notes (Optional)</div>
+            <TextArea
+              value={reviewNotes}
+              onChange={(e) => setReviewNotes(e.target.value)}
+              placeholder="Add any notes about the review"
+              autoSize={{ minRows: 3, maxRows: 6 }}
+            />
+          </div>
+        </Space> */}
+      </Modal>
+
+      {/* Change Request Modal */}
+      <Modal
+        title="Request Changes"
+        open={changeRequestModalOpen}
+        onOk={handleRequestChanges}
+        onCancel={() => setChangeRequestModalOpen(false)}
+        okText="Submit Changes"
+      >
+        <Space direction="vertical" className="w-full">
+          <div>
+            <div className="mb-1">Changes Required</div>
+            <TextArea
+              value={changeRequestNotes}
+              onChange={(e) => setChangeRequestNotes(e.target.value)}
+              placeholder="Describe what changes are needed"
+              autoSize={{ minRows: 3, maxRows: 6 }}
+              required
             />
           </div>
         </Space>

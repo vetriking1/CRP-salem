@@ -149,8 +149,8 @@ export class AutoAssignmentService {
       const teamMembers = await this.getTeamMembers(teamId);
       let targetMember: TeamMember | null = null;
 
-      if (pendingReason === "review") {
-        // Prefer managers or senior members
+      if (pendingReason === "review" || pendingReason === "clarity_needed") {
+        // Prefer managers or senior members for both review and clarity_needed
         targetMember = this.findReviewer(teamMembers);
       } else if (pendingReason === "data_missing") {
         // Prefer data collectors or members with data specialty
@@ -233,15 +233,18 @@ export class AutoAssignmentService {
 
   /**
    * Filter team members by difficulty requirements based on role
+   * - Easy: All roles (employee, data_collector, senior, manager, admin)
+   * - Medium: Employee and above (employee, senior, manager, admin)
+   * - Hard: Senior only (senior, manager, admin)
    */
   private static filterByDifficulty(
     members: TeamMember[],
     difficulty: string
   ): TeamMember[] {
     const difficultyRequirements: Record<string, string[]> = {
-      easy: ["admin", "manager", "senior", "employee", "data_collector"],
+      easy: ["employee"],
       medium: ["admin", "manager", "senior", "employee"],
-      hard: ["admin", "manager", "senior"],
+      hard: ["admin", "manager", "senior"], // Hard tasks only for senior roles
     };
 
     const requiredRoles = difficultyRequirements[difficulty] || ["employee"];
@@ -272,6 +275,7 @@ export class AutoAssignmentService {
 
   /**
    * Select the best member based on workload, capacity, and assignments
+   * For hard tasks, prefers senior roles. For easy/medium, distributes evenly.
    */
   private static selectBestMember(
     members: TeamMember[],
@@ -280,41 +284,49 @@ export class AutoAssignmentService {
   ): TeamMember | null {
     if (members.length === 0) return null;
 
-    // Calculate scores for each member (lower is better)
+    // Calculate scores for each member (lower score = better candidate)
     const scoredMembers = members.map((member) => {
       const activeAssignments = assignmentCounts[member.id] || 0;
 
       // Workload ratio (0-1, where 1 is at capacity)
-      const workloadRatio = activeAssignments / 10; // Simplified: assume max 10 tasks
+      const workloadRatio = activeAssignments / 10; // Assume max 10 tasks
 
       // Priority multiplier for urgent tasks
       const priorityMultiplier = criteria.priority === "urgent" ? 0.5 : 1;
 
-      // Role bonus (senior roles get preference for complex tasks)
+      // Role bonus: For hard tasks, prefer senior roles (negative score = higher priority)
       const roleBonus =
         criteria.difficulty === "hard"
           ? member.role === "senior"
-            ? -0.1
+            ? -0.2  // Senior gets highest priority for hard tasks
             : member.role === "manager"
-            ? -0.15
+            ? -0.15 // Manager is second choice
             : member.role === "admin"
-            ? -0.2
+            ? -0.1  // Admin is third choice
             : 0
-          : 0;
+          : 0; // For easy/medium tasks, no role preference
 
-      // Combined score: workload ratio + assignments + estimated hours impact - role bonus
+      // Combined score: workload + priority + hours + role bonus
       const score =
         workloadRatio * priorityMultiplier +
         activeAssignments * 0.1 +
         (criteria.estimatedHours / 40) * 0.5 +
         roleBonus;
 
-      return { member, score };
+      return { member, score, activeAssignments };
     });
 
-    // Sort by score (ascending) and return the best candidate
+    // Sort by score (ascending) - lowest score wins
     scoredMembers.sort((a, b) => a.score - b.score);
-    return scoredMembers[0]?.member || null;
+    
+    const selected = scoredMembers[0]?.member || null;
+    
+    // Log assignment decision for debugging
+    if (selected) {
+      console.log(`Auto-assigned to ${selected.full_name} (${selected.role}) - ${scoredMembers[0].activeAssignments} active tasks`);
+    }
+    
+    return selected;
   }
 
   /**
