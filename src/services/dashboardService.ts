@@ -57,11 +57,20 @@ export async function getDashboardStats() {
     // .gte('completed_at', startOfToday.toISOString())
     // .lte('completed_at', endOfToday.toISOString());
 
+  // Get delivered tasks for today
+  const { count: deliveredTodayCount } = await supabase
+    .from('tasks')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'delivered')
+    // .gte('completed_at', startOfToday.toISOString())
+    // .lte('completed_at', endOfToday.toISOString());
+
   return {
     active: activeCount || 0,
     pending: pendingCount || 0,
     overdue: overdueCount || 0,
     completedToday: completedTodayCount || 0,
+    deliveredToday: deliveredTodayCount || 0,
   };
 }
 
@@ -265,6 +274,7 @@ export async function getTasksByStatus() {
 
   return [
     { name: 'Completed', value: statusCounts.completed || 0 },
+    { name: 'Delivered', value: statusCounts.delivered || 0 },
     { name: 'In Progress', value: statusCounts.in_progress || 0 },
     { name: 'Pending', value: statusCounts.pending || 0 },
     { name: 'Not Started', value: statusCounts.not_started || 0 },

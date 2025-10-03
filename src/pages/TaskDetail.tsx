@@ -68,6 +68,16 @@ export default function TaskDetail() {
     fetchTaskDetails();
   }, []);
 
+  // Update isAssigned when userProfile or task changes
+  useEffect(() => {
+    if (task && userProfile) {
+      const assigned = task.task_assignments?.some(
+        (a: any) => a.user_id === userProfile?.id
+      );
+      setIsAssigned(assigned);
+    }
+  }, [task, userProfile]);
+
   const fetchTaskDetails = async () => {
     setLoading(true);
     try {
@@ -89,12 +99,6 @@ export default function TaskDetail() {
 
       if (taskError) throw taskError;
       setTask(taskData);
-      // Check if current user is assigned
-      const assigned = taskData.task_assignments?.some(
-        (a: any) => a.user_id === userProfile?.id
-      );
-      setIsAssigned(assigned);
-      console.log(assigned);
 
       // Fetch subtasks
       const { data: subtasksData } = await supabase
@@ -425,14 +429,25 @@ export default function TaskDetail() {
     }
     
     try {
-      // Get the original assignee from task metadata
-      const { data: taskData } = await supabase
-        .from("tasks")
-        .select("metadata")
-        .eq("id", id)
-        .single();
+      // Get the original assignee from task_assignments table (the assignee before the current reviewer)
+      // We need to find the most recent non-active assignment (the one before the current active assignment)
+      const { data: allAssignments } = await supabase
+        .from("task_assignments")
+        .select("user_id, assigned_at, is_active")
+        .eq("task_id", id)
+        .order("assigned_at", { ascending: false });
       
-      const originalAssigneeId = taskData?.metadata?.original_assignee;
+      if (!allAssignments || allAssignments.length === 0) {
+        toast({
+          title: "Error",
+          description: "Could not find any task assignments",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Find the original assignee (the most recent non-active assignment before the current active one)
+      const originalAssigneeId = allAssignments.find((assignment: any) => !assignment.is_active)?.user_id;
       
       if (!originalAssigneeId) {
         toast({
@@ -959,12 +974,16 @@ export default function TaskDetail() {
             )}
             {task.status === "review" && (
               <>
-                <Button type="primary" onClick={() => setReviewModalOpen(true)}>
-                  Review Done
-                </Button>
-                <Button onClick={() => setChangeRequestModalOpen(true)}>
-                  Request Changes
-                </Button>
+                {(userProfile?.role === "senior" || userProfile?.role === "manager" || userProfile?.role === "admin") && isAssigned && (
+                  <>
+                    <Button type="primary" onClick={() => setReviewModalOpen(true)}>
+                      Review Done
+                    </Button>
+                    <Button onClick={() => setChangeRequestModalOpen(true)}>
+                      Request Changes
+                    </Button>
+                  </>
+                )}
               </>
             )}
             {task.status === "completed" && (

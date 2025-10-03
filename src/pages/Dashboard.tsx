@@ -244,6 +244,13 @@ export default function Dashboard() {
             color: "text-success",
             prefix: null,
           },
+          {
+            title: "Delivered Tasks",
+            value: statsData.deliveredToday,
+            icon: <CheckCircleOutlined />,
+            color: "text-success",
+            prefix: null,
+          },
         ]);
 
         setTasksByStatus(statusData);
