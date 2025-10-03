@@ -20,7 +20,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, X } from "lucide-react";
+import { Upload, X, AlertTriangle } from "lucide-react";
+import { AutoAssignmentService } from "@/services/autoAssignmentService";
+import { NotificationService } from "@/services/notificationService";
+import {
+  calculateDueDateInfo,
+  getDueDateStatusText,
+  shouldUpdatePriority,
+  type Priority,
+} from "@/utils/dueDateUtils";
 
 interface TaskTemplate {
   id: string;
@@ -52,11 +60,13 @@ const CreateTask = () => {
     title: "",
     description: "",
     priority: "medium",
+    difficulty: "easy",
     estimated_hours: "",
     due_date: "",
     template_id: "",
     team_id: "",
   });
+  const [priorityAdjusted, setPriorityAdjusted] = useState(false);
 
   useEffect(() => {
     fetchTaskTemplates();
@@ -119,6 +129,45 @@ const CreateTask = () => {
     setSubtasks(subtasks.filter((subtask) => subtask.id !== subtaskId));
   };
 
+  // Handle due date change and auto-adjust priority
+  const handleDueDateChange = (date: string) => {
+    setFormData({ ...formData, due_date: date });
+
+    if (date) {
+      const dueDateInfo = calculateDueDateInfo(
+        date,
+        formData.priority as Priority
+      );
+      const shouldAdjust = shouldUpdatePriority(
+        formData.priority as Priority,
+        dueDateInfo.suggestedPriority
+      );
+
+      if (shouldAdjust) {
+        setFormData((prev) => ({
+          ...prev,
+          priority: dueDateInfo.suggestedPriority,
+        }));
+        setPriorityAdjusted(true);
+      } else {
+        setPriorityAdjusted(false);
+      }
+    } else {
+      setPriorityAdjusted(false);
+    }
+  };
+
+  // Handle manual priority change
+  const handlePriorityChange = (priority: string) => {
+    setFormData({ ...formData, priority });
+    setPriorityAdjusted(false); // Reset auto-adjustment flag when manually changed
+  };
+
+  // Get due date info for display
+  const dueDateInfo = formData.due_date
+    ? calculateDueDateInfo(formData.due_date, formData.priority as Priority)
+    : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -140,12 +189,23 @@ const CreateTask = () => {
 
       // Create task
       // Insert task with team_id if provided
+      // Normalize fields to match DB enums and types
+      const normalizedPriority = (
+        formData.priority === "urgent" ? "high" : formData.priority
+      ) as "low" | "medium" | "high";
+      const normalizedDueDate = formData.due_date
+        ? new Date(formData.due_date).toISOString()
+        : null;
       const taskPayload = {
         title: formData.title,
         description: formData.description,
-        priority: formData.priority as "low" | "medium" | "high" | "urgent",
+        priority: normalizedPriority,
+        difficulty: formData.difficulty as
+          | "easy"
+          | "medium"
+          | "hard",
         estimated_hours: parseFloat(formData.estimated_hours) || 0,
-        due_date: formData.due_date || null,
+        due_date: normalizedDueDate,
         created_by: userProfile.id,
         status: "not_started",
         template_id: formData.template_id || null,
@@ -158,7 +218,10 @@ const CreateTask = () => {
         .select()
         .single();
 
-      if (taskError) throw taskError;
+      if (taskError) {
+        console.error("Task insert error", taskError, { taskPayload });
+        throw taskError;
+      }
 
       // Create subtasks if any
       if (subtasks.length > 0) {
@@ -203,80 +266,37 @@ const CreateTask = () => {
       // After creating the task, try to auto-assign if a team was selected
       if (task && formData.team_id) {
         try {
-          // 1) Get team member ids
-          const { data: memberIds, error: memberIdsError } = await supabase
-            .from("team_members")
-            .select("user_id")
-            .eq("team_id", formData.team_id);
-
-          if (memberIdsError) throw memberIdsError;
-
-          const userIds = (memberIds || [])
-            .map((m: { user_id: string }) => m.user_id)
-            .filter((id): id is string => !!id);
-
-          if (userIds.length > 0) {
-            // 2) Fetch users in team with workload
-            const { data: usersData, error: usersError } = await supabase
-              .from("users")
-              .select("id, full_name, current_workload_hours, is_active")
-              .in("id", userIds)
-              .eq("is_active", true);
-
-            if (usersError) throw usersError;
-
-            // 3) Fetch active assignment counts for these users
-            const { data: assignmentsData } = await supabase
-              .from("task_assignments")
-              .select("user_id")
-              .eq("is_active", true)
-              .in("user_id", userIds);
-
-            const assignmentCounts: Record<string, number> = {};
-            (assignmentsData || []).forEach((a: { user_id: string }) => {
-              assignmentCounts[a.user_id] =
-                (assignmentCounts[a.user_id] || 0) + 1;
-            });
-
-            // 4) Choose user with minimal (current_workload_hours + active assignments)
-            let bestUserId: string | null = null;
-            let bestScore = Number.POSITIVE_INFINITY;
-
-            (usersData || []).forEach(
-              (u: { id: string; current_workload_hours: number | string }) => {
-                const current = Number(u.current_workload_hours || 0) || 0;
-                const assigns = assignmentCounts[u.id] || 0;
-                const score = current + assigns; // simple heuristic
-                if (score < bestScore) {
-                  bestScore = score;
-                  bestUserId = u.id;
-                }
-              }
-            );
-
-            // 5) Create task_assignments record and update task status
-            if (bestUserId) {
-              const { error: assignError } = await supabase
-                .from("task_assignments")
-                .insert([
-                  {
-                    task_id: task.id,
-                    user_id: bestUserId,
-                    assigned_by: userProfile.id,
-                    is_active: true,
-                  },
-                ]);
-
-              if (assignError) throw assignError;
-
-              await supabase
-                .from("tasks")
-                .update({ status: "assigned" })
-                .eq("id", task.id);
+          const assignmentResult = await AutoAssignmentService.assignTask(
+            task.id,
+            {
+              teamId: formData.team_id,
+              difficulty: formData.difficulty as
+                | "easy"
+                | "medium"
+                | "hard",
+              estimatedHours: parseFloat(formData.estimated_hours) || 0,
+              priority: normalizedPriority as "low" | "medium" | "high",
+              assignedBy: userProfile.id,
             }
+          );
+
+          if (!assignmentResult.success) {
+            console.warn("Auto-assignment failed:", assignmentResult.error);
           }
         } catch (assignErr: unknown) {
           console.error("Auto-assignment error:", assignErr);
+        }
+
+        // Notify team managers about the new task
+        try {
+          await NotificationService.notifyTeamManagersOnTaskCreation(
+            task.id,
+            task.title,
+            formData.team_id,
+            userProfile.id
+          );
+        } catch (notifyErr: unknown) {
+          console.error("Notification error:", notifyErr);
         }
       }
 
@@ -408,23 +428,47 @@ const CreateTask = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="priority">Priority</Label>
+                <div className="space-y-2">
+                  <Select
+                    value={formData.priority}
+                    onValueChange={handlePriorityChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {priorityAdjusted && (
+                    <div className="flex items-center gap-2 text-sm text-orange-600">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>Priority auto-adjusted based on due date</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="difficulty">Difficulty</Label>
                 <Select
-                  value={formData.priority}
+                  value={formData.difficulty}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, priority: value })
+                    setFormData({ ...formData, difficulty: value })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="easy">Easy</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="hard">Hard</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -448,14 +492,28 @@ const CreateTask = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="due_date">Due Date</Label>
-                <Input
-                  id="due_date"
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, due_date: e.target.value })
-                  }
-                />
+                <div className="space-y-2">
+                  <Input
+                    id="due_date"
+                    type="date"
+                    value={formData.due_date}
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                  />
+                  {dueDateInfo && dueDateInfo.status !== "normal" && (
+                    <div
+                      className={`flex items-center gap-2 text-sm ${
+                        dueDateInfo.isOverdue
+                          ? "text-red-600"
+                          : dueDateInfo.isDueToday
+                          ? "text-orange-600"
+                          : "text-blue-600"
+                      }`}
+                    >
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>{getDueDateStatusText(dueDateInfo)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

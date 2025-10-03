@@ -20,7 +20,7 @@ BEGIN
   SELECT u.id INTO v_assigned_user_id
   FROM users u
   WHERE u.is_active = true
-    AND u.role IN ('employee', 'data_collector', 'reviewer')
+    AND u.role IN ('employee', 'data_collector', 'senior')
     AND u.current_workload_hours < u.max_capacity_hours
     -- Boost score if specialty matches keywords in task
     AND (

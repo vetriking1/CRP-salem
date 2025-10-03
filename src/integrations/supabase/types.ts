@@ -162,6 +162,91 @@ export type Database = {
           },
         ]
       }
+      recurring_tasks: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          description: string | null
+          difficulty: Database["public"]["Enums"]["difficulty_level"] | null
+          estimated_hours: number | null
+          id: string
+          is_active: boolean | null
+          last_generated_at: string | null
+          next_generation_date: string | null
+          priority: Database["public"]["Enums"]["priority"] | null
+          recurrence_date: string | null
+          recurrence_day: number | null
+          recurrence_frequency: Database["public"]["Enums"]["recurrence_frequency"]
+          recurrence_month: number | null
+          team_id: string
+          template_id: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          estimated_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_generated_at?: string | null
+          next_generation_date?: string | null
+          priority?: Database["public"]["Enums"]["priority"] | null
+          recurrence_date?: string | null
+          recurrence_day?: number | null
+          recurrence_frequency: Database["public"]["Enums"]["recurrence_frequency"]
+          recurrence_month?: number | null
+          team_id: string
+          template_id?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          estimated_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_generated_at?: string | null
+          next_generation_date?: string | null
+          priority?: Database["public"]["Enums"]["priority"] | null
+          recurrence_date?: string | null
+          recurrence_day?: number | null
+          recurrence_frequency?: Database["public"]["Enums"]["recurrence_frequency"]
+          recurrence_month?: number | null
+          team_id?: string
+          template_id?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_tasks_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_tasks_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "task_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subtask_templates: {
         Row: {
           created_at: string | null
@@ -258,6 +343,7 @@ export type Database = {
         Row: {
           assigned_at: string | null
           assigned_by: string | null
+          assignment_type: Database["public"]["Enums"]["assignment_type"] | null
           id: string
           is_active: boolean | null
           task_id: string | null
@@ -266,6 +352,7 @@ export type Database = {
         Insert: {
           assigned_at?: string | null
           assigned_by?: string | null
+          assignment_type?: Database["public"]["Enums"]["assignment_type"] | null
           id?: string
           is_active?: boolean | null
           task_id?: string | null
@@ -274,6 +361,7 @@ export type Database = {
         Update: {
           assigned_at?: string | null
           assigned_by?: string | null
+          assignment_type?: Database["public"]["Enums"]["assignment_type"] | null
           id?: string
           is_active?: boolean | null
           task_id?: string | null
@@ -395,6 +483,7 @@ export type Database = {
           created_by: string | null
           delivered_at: string | null
           description: string | null
+          difficulty: Database["public"]["Enums"]["difficulty_level"] | null
           due_date: string | null
           estimated_hours: number | null
           id: string
@@ -415,6 +504,7 @@ export type Database = {
           created_by?: string | null
           delivered_at?: string | null
           description?: string | null
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
           due_date?: string | null
           estimated_hours?: number | null
           id?: string
@@ -435,6 +525,7 @@ export type Database = {
           created_by?: string | null
           delivered_at?: string | null
           description?: string | null
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
           due_date?: string | null
           estimated_hours?: number | null
           id?: string
@@ -557,40 +648,34 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
-          current_workload_hours: number | null
+          current_task_count: number | null
           email: string
           full_name: string
           id: string
           is_active: boolean | null
-          max_capacity_hours: number | null
           role: Database["public"]["Enums"]["user_role"]
-          specialty: string | null
           updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
-          current_workload_hours?: number | null
+          current_task_count?: number | null
           email: string
           full_name: string
           id?: string
           is_active?: boolean | null
-          max_capacity_hours?: number | null
           role?: Database["public"]["Enums"]["user_role"]
-          specialty?: string | null
           updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string | null
-          current_workload_hours?: number | null
           email?: string
           full_name?: string
           id?: string
           is_active?: boolean | null
-          max_capacity_hours?: number | null
+          current_task_count: number | null
           role?: Database["public"]["Enums"]["user_role"]
-          specialty?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -614,8 +699,11 @@ export type Database = {
       }
     }
     Enums: {
+      assignment_type: "primary" | "reviewer" | "collaborator"
+      difficulty_level: "easy" | "medium" | "hard"
       pending_reason: "data_missing" | "review" | "clarity_needed"
       priority: "low" | "medium" | "high" | "urgent"
+      recurrence_frequency: "weekly" | "monthly" | "yearly"
       task_status:
         | "not_started"
         | "assigned"
@@ -629,7 +717,7 @@ export type Database = {
         | "admin"
         | "manager"
         | "data_collector"
-        | "reviewer"
+        | "senior"
         | "employee"
     }
     CompositeTypes: {
@@ -755,11 +843,38 @@ export type CompositeTypes<
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
+export interface Notification extends Tables<'notifications'> {
+  task?: {
+    id: string;
+    title: string;
+    status?: string;
+  };
+}
+
+export type NotificationType = 
+  | 'task_assigned' 
+  | 'task_due_soon' 
+  | 'task_overdue' 
+  | 'task_created' 
+  | 'task_completed' 
+  | 'task_status_changed';
+
+export interface CreateNotificationParams {
+  userId: string;
+  taskId?: string;
+  type: NotificationType;
+  title: string;
+  message?: string;
+}
+
 export const Constants = {
   public: {
     Enums: {
+      assignment_type: ["primary", "reviewer", "collaborator"],
+      difficulty_level: ["easy", "medium", "hard"],
       pending_reason: ["data_missing", "review", "clarity_needed"],
       priority: ["low", "medium", "high", "urgent"],
+      recurrence_frequency: ["weekly", "monthly", "yearly"],
       task_status: [
         "not_started",
         "assigned",
@@ -770,7 +885,7 @@ export const Constants = {
         "delivered",
         "rejected",
       ],
-      user_role: ["admin", "manager", "data_collector", "reviewer", "employee"],
+      user_role: ["admin", "manager", "data_collector", "senior", "employee"],
     },
   },
 } as const

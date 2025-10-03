@@ -1,4 +1,15 @@
-import { Card, Row, Col, Statistic, Select, DatePicker, Space, Table, Progress, Tag } from 'antd';
+import {
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Select,
+  DatePicker,
+  Space,
+  Table,
+  Progress,
+  Tag,
+} from "antd";
 import {
   TrophyOutlined,
   ClockCircleOutlined,
@@ -6,68 +17,128 @@ import {
   TeamOutlined,
   RiseOutlined,
   FallOutlined,
-} from '@ant-design/icons';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+} from "@ant-design/icons";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+} from "recharts";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-const COLORS = ['hsl(var(--accent))', 'hsl(var(--primary))', 'hsl(var(--warning))', 'hsl(var(--destructive))'];
+const COLORS = [
+  "hsl(var(--accent))",
+  "hsl(var(--primary))",
+  "hsl(var(--warning))",
+  "hsl(var(--destructive))",
+];
 
 export default function Analytics() {
   const taskCompletionTrend = [
-    { month: 'Jan', completed: 32, assigned: 40 },
-    { month: 'Feb', completed: 38, assigned: 42 },
-    { month: 'Mar', completed: 45, assigned: 48 },
-    { month: 'Apr', completed: 40, assigned: 45 },
-    { month: 'May', completed: 52, assigned: 55 },
-    { month: 'Jun', completed: 48, assigned: 50 },
+    { month: "Jan", completed: 32, assigned: 40 },
+    { month: "Feb", completed: 38, assigned: 42 },
+    { month: "Mar", completed: 45, assigned: 48 },
+    { month: "Apr", completed: 40, assigned: 45 },
+    { month: "May", completed: 52, assigned: 55 },
+    { month: "Jun", completed: 48, assigned: 50 },
   ];
 
   const slaCompliance = [
-    { name: 'Within SLA', value: 75 },
-    { name: 'SLA Breached', value: 15 },
-    { name: 'At Risk', value: 10 },
+    { name: "Within SLA", value: 75 },
+    { name: "SLA Breached", value: 15 },
+    { name: "At Risk", value: 10 },
   ];
 
   const pendingReasons = [
-    { reason: 'Data Missing', count: 12, percentage: 48 },
-    { reason: 'Clarity Needed', count: 8, percentage: 32 },
-    { reason: 'Under Review', count: 5, percentage: 20 },
+    { reason: "Data Missing", count: 12, percentage: 48 },
+    { reason: "Clarity Needed", count: 8, percentage: 32 },
+    { reason: "Under Review", count: 5, percentage: 20 },
   ];
 
   const teamPerformance = [
-    { team: 'Tax Compliance', tasks: 145, completed: 120, onTime: 105, rating: 4.5 },
-    { team: 'Data Management', tasks: 98, completed: 85, onTime: 78, rating: 4.2 },
+    {
+      team: "Tax Compliance",
+      tasks: 145,
+      completed: 120,
+      onTime: 105,
+      rating: 4.5,
+    },
+    {
+      team: "Data Management",
+      tasks: 98,
+      completed: 85,
+      onTime: 78,
+      rating: 4.2,
+    },
   ];
 
   const specialtyData = [
-    { specialty: 'GST Filing', value: 8.5 },
-    { specialty: 'Income Tax', value: 7.8 },
-    { specialty: 'TDS Return', value: 6.5 },
-    { specialty: 'Audit Support', value: 9.2 },
-    { specialty: 'Data Entry', value: 5.5 },
+    { specialty: "GST Filing", value: 8.5 },
+    { specialty: "Income Tax", value: 7.8 },
+    { specialty: "TDS Return", value: 6.5 },
+    { specialty: "Audit Support", value: 9.2 },
+    { specialty: "Data Entry", value: 5.5 },
   ];
 
   const topPerformers = [
-    { rank: 1, name: 'David Employee', completed: 28, avgTime: '5.2h', rating: 4.8 },
-    { rank: 2, name: 'Emma Worker', completed: 24, avgTime: '6.1h', rating: 4.6 },
-    { rank: 3, name: 'Lisa Reviewer', completed: 20, avgTime: '7.5h', rating: 4.5 },
-    { rank: 4, name: 'Mike DataCollector', completed: 18, avgTime: '5.8h', rating: 4.3 },
+    {
+      rank: 1,
+      name: "David Employee",
+      completed: 28,
+      avgTime: "5.2h",
+      rating: 4.8,
+    },
+    {
+      rank: 2,
+      name: "Emma Worker",
+      completed: 24,
+      avgTime: "6.1h",
+      rating: 4.6,
+    },
+    {
+      rank: 3,
+      name: "Lisa senior",
+      completed: 20,
+      avgTime: "7.5h",
+      rating: 4.5,
+    },
+    {
+      rank: 4,
+      name: "Mike DataCollector",
+      completed: 18,
+      avgTime: "5.8h",
+      rating: 4.3,
+    },
   ];
 
   const workloadUtilization = [
-    { name: 'David Employee', capacity: 40, utilized: 35, efficiency: 87 },
-    { name: 'Emma Worker', capacity: 40, utilized: 38, efficiency: 95 },
-    { name: 'Lisa Reviewer', capacity: 40, utilized: 32, efficiency: 80 },
-    { name: 'Mike DataCollector', capacity: 40, utilized: 30, efficiency: 75 },
+    { name: "David Employee", capacity: 40, utilized: 35, efficiency: 87 },
+    { name: "Emma Worker", capacity: 40, utilized: 38, efficiency: 95 },
+    { name: "Lisa senior", capacity: 40, utilized: 32, efficiency: 80 },
+    { name: "Mike DataCollector", capacity: 40, utilized: 30, efficiency: 75 },
   ];
 
   const performerColumns = [
     {
-      title: 'Rank',
-      dataIndex: 'rank',
-      key: 'rank',
+      title: "Rank",
+      dataIndex: "rank",
+      key: "rank",
       render: (rank: number) => (
         <Space>
           {rank === 1 && <TrophyOutlined className="text-warning text-lg" />}
@@ -76,15 +147,15 @@ export default function Analytics() {
       ),
     },
     {
-      title: 'Name',
-      dataIndex: 'name',
-      key: 'name',
+      title: "Name",
+      dataIndex: "name",
+      key: "name",
       render: (text: string) => <span className="font-medium">{text}</span>,
     },
     {
-      title: 'Tasks Completed',
-      dataIndex: 'completed',
-      key: 'completed',
+      title: "Tasks Completed",
+      dataIndex: "completed",
+      key: "completed",
       render: (value: number) => (
         <Space>
           <span className="font-bold text-accent">{value}</span>
@@ -93,17 +164,15 @@ export default function Analytics() {
       ),
     },
     {
-      title: 'Avg Time',
-      dataIndex: 'avgTime',
-      key: 'avgTime',
+      title: "Avg Time",
+      dataIndex: "avgTime",
+      key: "avgTime",
     },
     {
-      title: 'Rating',
-      dataIndex: 'rating',
-      key: 'rating',
-      render: (rating: number) => (
-        <Tag color="gold">{rating} ⭐</Tag>
-      ),
+      title: "Rating",
+      dataIndex: "rating",
+      key: "rating",
+      render: (rating: number) => <Tag color="gold">{rating} ⭐</Tag>,
     },
   ];
 
@@ -112,7 +181,9 @@ export default function Analytics() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Analytics</h1>
-          <p className="text-muted-foreground">Comprehensive insights into team performance and task metrics</p>
+          <p className="text-muted-foreground">
+            Comprehensive insights into team performance and task metrics
+          </p>
         </div>
         <Space>
           <RangePicker />
@@ -133,9 +204,11 @@ export default function Analytics() {
               precision={1}
               suffix="%"
               prefix={<RiseOutlined className="text-success" />}
-              valueStyle={{ color: 'hsl(var(--success))' }}
+              valueStyle={{ color: "hsl(var(--success))" }}
             />
-            <div className="text-xs text-success mt-2">+5.2% from last month</div>
+            <div className="text-xs text-success mt-2">
+              +5.2% from last month
+            </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -146,9 +219,11 @@ export default function Analytics() {
               precision={1}
               suffix="hrs"
               prefix={<ClockCircleOutlined className="text-primary" />}
-              valueStyle={{ color: 'hsl(var(--primary))' }}
+              valueStyle={{ color: "hsl(var(--primary))" }}
             />
-            <div className="text-xs text-destructive mt-2">+0.3hrs from last month</div>
+            <div className="text-xs text-destructive mt-2">
+              +0.3hrs from last month
+            </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -158,9 +233,11 @@ export default function Analytics() {
               value={85}
               suffix="%"
               prefix={<CheckCircleOutlined className="text-accent" />}
-              valueStyle={{ color: 'hsl(var(--accent))' }}
+              valueStyle={{ color: "hsl(var(--accent))" }}
             />
-            <div className="text-xs text-success mt-2">+2.5% from last month</div>
+            <div className="text-xs text-success mt-2">
+              +2.5% from last month
+            </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -169,9 +246,11 @@ export default function Analytics() {
               title="Active Members"
               value={24}
               prefix={<TeamOutlined className="text-warning" />}
-              valueStyle={{ color: 'hsl(var(--foreground))' }}
+              valueStyle={{ color: "hsl(var(--foreground))" }}
             />
-            <div className="text-xs text-muted-foreground mt-2">Across 2 teams</div>
+            <div className="text-xs text-muted-foreground mt-2">
+              Across 2 teams
+            </div>
           </Card>
         </Col>
       </Row>
@@ -181,19 +260,35 @@ export default function Analytics() {
           <Card title="Task Completion Trend" className="border-border">
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={taskCompletionTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(var(--border))"
+                />
                 <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
                 <YAxis stroke="hsl(var(--muted-foreground))" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
                   }}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="completed" stroke="hsl(var(--accent))" strokeWidth={3} name="Completed" />
-                <Line type="monotone" dataKey="assigned" stroke="hsl(var(--primary))" strokeWidth={3} name="Assigned" strokeDasharray="5 5" />
+                <Line
+                  type="monotone"
+                  dataKey="completed"
+                  stroke="hsl(var(--accent))"
+                  strokeWidth={3}
+                  name="Completed"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="assigned"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={3}
+                  name="Assigned"
+                  strokeDasharray="5 5"
+                />
               </LineChart>
             </ResponsiveContainer>
           </Card>
@@ -214,14 +309,17 @@ export default function Analytics() {
                   dataKey="value"
                 >
                   {slaCompliance.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
                   }}
                 />
               </PieChart>
@@ -235,19 +333,32 @@ export default function Analytics() {
           <Card title="Team Performance Comparison" className="border-border">
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={teamPerformance}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(var(--border))"
+                />
                 <XAxis dataKey="team" stroke="hsl(var(--muted-foreground))" />
                 <YAxis stroke="hsl(var(--muted-foreground))" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
                   }}
                 />
                 <Legend />
-                <Bar dataKey="completed" fill="hsl(var(--accent))" name="Completed" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="onTime" fill="hsl(var(--primary))" name="On Time" radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="completed"
+                  fill="hsl(var(--accent))"
+                  name="Completed"
+                  radius={[8, 8, 0, 0]}
+                />
+                <Bar
+                  dataKey="onTime"
+                  fill="hsl(var(--primary))"
+                  name="On Time"
+                  radius={[8, 8, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -258,14 +369,23 @@ export default function Analytics() {
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={specialtyData}>
                 <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis dataKey="specialty" stroke="hsl(var(--muted-foreground))" />
+                <PolarAngleAxis
+                  dataKey="specialty"
+                  stroke="hsl(var(--muted-foreground))"
+                />
                 <PolarRadiusAxis stroke="hsl(var(--muted-foreground))" />
-                <Radar name="Avg Hours" dataKey="value" stroke="hsl(var(--accent))" fill="hsl(var(--accent))" fillOpacity={0.6} />
+                <Radar
+                  name="Avg Hours"
+                  dataKey="value"
+                  stroke="hsl(var(--accent))"
+                  fill="hsl(var(--accent))"
+                  fillOpacity={0.6}
+                />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
                   }}
                 />
               </RadarChart>
@@ -301,10 +421,10 @@ export default function Analytics() {
                     percent={item.efficiency}
                     strokeColor={
                       item.efficiency >= 90
-                        ? 'hsl(var(--success))'
+                        ? "hsl(var(--success))"
                         : item.efficiency >= 75
-                        ? 'hsl(var(--accent))'
-                        : 'hsl(var(--warning))'
+                        ? "hsl(var(--accent))"
+                        : "hsl(var(--warning))"
                     }
                   />
                 </div>
@@ -319,15 +439,23 @@ export default function Analytics() {
           <BarChart data={pendingReasons} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-            <YAxis type="category" dataKey="reason" stroke="hsl(var(--muted-foreground))" />
+            <YAxis
+              type="category"
+              dataKey="reason"
+              stroke="hsl(var(--muted-foreground))"
+            />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '8px',
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "8px",
               }}
             />
-            <Bar dataKey="count" fill="hsl(var(--warning))" radius={[0, 8, 8, 0]} />
+            <Bar
+              dataKey="count"
+              fill="hsl(var(--warning))"
+              radius={[0, 8, 8, 0]}
+            />
           </BarChart>
         </ResponsiveContainer>
       </Card>

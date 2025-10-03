@@ -8,10 +8,12 @@ import { ConfigProvider, theme } from "antd";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { MainLayout } from "./components/Layout/MainLayout";
+import { ScheduledJobService } from "./services/scheduledJobService";
 import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
 import TaskDetail from "./pages/TaskDetail";
 import CreateTask from "./pages/CreateTask";
+import RecurringTasks from "./pages/RecurringTasks";
 import GanttChart from "./pages/GanttChart";
 import Kanban from "./pages/Kanban";
 import Analytics from "./pages/Analytics";
@@ -42,6 +44,14 @@ const App = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Initialize scheduled jobs when user is authenticated
+  useEffect(() => {
+    if (user) {
+      // Initialize scheduled notification jobs
+      ScheduledJobService.initializeScheduledJobs();
+    }
+  }, [user]);
 
   if (loading) {
     return (
@@ -87,6 +97,7 @@ const App = () => {
                 <Route path="tasks" element={<Tasks />} />
                 <Route path="tasks/create" element={<CreateTask />} />
                 <Route path="tasks/:id" element={<TaskDetail />} />
+                <Route path="recurring-tasks" element={<RecurringTasks />} />
                 <Route path="gantt" element={<GanttChart />} />
                 <Route path="kanban" element={<Kanban />} />
                 <Route path="analytics" element={<Analytics />} />

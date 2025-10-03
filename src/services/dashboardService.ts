@@ -130,60 +130,55 @@ export async function getRecentTasks(): Promise<TaskWithAssignee[]> {
 }
 
 export async function getTopPerformers(): Promise<TopPerformer[]> {
-  // First, get completed tasks with their user information
-  const { data, error } = await supabase
+  // Get completed tasks from last 30 days
+  const { data: completedTasks, error } = await supabase
     .from('tasks')
-    .select(`
-      completed_by
-    `)
+    .select('id')
     .eq('status', 'completed')
-    .gte('completed_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()); // Last 30 days
+    .gte('completed_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
 
-  if (error) {
+  if (error || !completedTasks) {
     console.error('Error fetching top performers data:', error);
     return [];
   }
 
-  // Group tasks by user ID to count completions
-  const completionCounts: Record<string, number> = {};
-  data.forEach(task => {
-    if (task.completed_by) {
-      completionCounts[task.completed_by] = (completionCounts[task.completed_by] || 0) + 1;
+  const taskIds = completedTasks.map(t => t.id);
+  if (taskIds.length === 0) return [];
+
+  // Get active assignments for these tasks
+  const { data: assignments, error: assignError } = await supabase
+    .from('task_assignments')
+    .select('user_id, users!task_assignments_user_id_fkey(id, full_name)')
+    .in('task_id', taskIds)
+    .eq('is_active', true);
+
+  if (assignError || !assignments) {
+    console.error('Error fetching assignments:', assignError);
+    return [];
+  }
+
+  // Count completions per user
+  const completionCounts: Record<string, { name: string; count: number }> = {};
+  assignments.forEach(assignment => {
+    const userId = assignment.user_id;
+    const userName = assignment.users?.full_name || 'Unknown';
+    if (!completionCounts[userId]) {
+      completionCounts[userId] = { name: userName, count: 0 };
     }
+    completionCounts[userId].count++;
   });
 
-  // Get the user details for the top performers
-  const userIds = Object.keys(completionCounts);
-  if (userIds.length === 0) {
-    return [];
-  }
-
-  const { data: usersData, error: usersError } = await supabase
-    .from('users')
-    .select('id, full_name')
-    .in('id', userIds);
-
-  if (usersError) {
-    console.error('Error fetching user data for top performers:', usersError);
-    return [];
-  }
-
-  // Combine the completion counts with user information
-  const performers = usersData
-    .map(user => ({
-      id: user.id,
-      name: user.full_name,
-      completed: completionCounts[user.id] || 0,
-      rank: 0 // Will be assigned after sorting
+  // Convert to array and sort
+  return Object.entries(completionCounts)
+    .map(([id, data]) => ({
+      id,
+      name: data.name,
+      completed: data.count,
+      rank: 0
     }))
     .sort((a, b) => b.completed - a.completed)
-    .slice(0, 5); // Return top 5 performers
-
-  // Assign ranks
-  return performers.map((performer, index) => ({
-    ...performer,
-    rank: index + 1
-  }));
+    .slice(0, 5)
+    .map((performer, index) => ({ ...performer, rank: index + 1 }));
 }
 
 export async function getRecentActivity(): Promise<ActivityItem[]> {

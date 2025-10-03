@@ -1,5 +1,5 @@
 -- Create enum types for roles and task status
-CREATE TYPE user_role AS ENUM ('admin', 'manager', 'data_collector', 'reviewer', 'employee');
+CREATE TYPE user_role AS ENUM ('admin', 'manager', 'data_collector', 'senior', 'employee');
 CREATE TYPE task_status AS ENUM ('not_started', 'assigned', 'in_progress', 'pending', 'review', 'completed', 'delivered', 'rejected');
 CREATE TYPE pending_reason AS ENUM ('data_missing', 'review', 'clarity_needed');
 CREATE TYPE priority AS ENUM ('low', 'medium', 'high', 'urgent');

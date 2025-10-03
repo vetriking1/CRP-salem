@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Badge, Avatar, Dropdown, Button, Space } from 'antd';
+import { useState, useEffect } from "react";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import { Layout, Menu, Badge, Avatar, Dropdown, Button, Space } from "antd";
 import {
   DashboardOutlined,
   CheckSquareOutlined,
@@ -14,11 +14,11 @@ import {
   LogoutOutlined,
   SettingOutlined,
   ProjectOutlined,
-} from '@ant-design/icons';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import logo from '@/assets/cf-logo.jpg';
-import { NotificationDropdown } from '@/components/Notifications/NotificationDropdown';
+} from "@ant-design/icons";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import logo from "@/assets/cf-logo.jpg";
+import { NotificationDropdown } from "@/components/Notifications/NotificationDropdown";
 
 const { Header, Sider, Content } = Layout;
 
@@ -34,12 +34,14 @@ export const MainLayout = () => {
   }, []);
 
   const fetchUserProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', user.email)
+        .from("users")
+        .select("*")
+        .eq("email", user.email)
         .single();
       setUserProfile(data);
     }
@@ -48,59 +50,61 @@ export const MainLayout = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast({
-      title: 'Logged out',
-      description: 'You have been logged out successfully',
+      title: "Logged out",
+      description: "You have been logged out successfully",
     });
-    navigate('/auth');
+    navigate("/auth");
   };
 
   const menuItems = [
     {
-      key: '/',
+      key: "/",
       icon: <DashboardOutlined />,
       label: <Link to="/">Dashboard</Link>,
     },
     {
-      key: '/tasks',
+      key: "/tasks",
       icon: <CheckSquareOutlined />,
       label: <Link to="/tasks">Tasks</Link>,
     },
     {
-      key: '/gantt',
+      key: "/gantt",
       icon: <CalendarOutlined />,
       label: <Link to="/gantt">Gantt Chart</Link>,
     },
     {
-      key: '/kanban',
+      key: "/kanban",
       icon: <ProjectOutlined />,
       label: <Link to="/kanban">Kanban Board</Link>,
     },
+
     {
-      key: '/analytics',
-      icon: <BarChartOutlined />,
-      label: <Link to="/analytics">Analytics</Link>,
-    },
-    {
-      key: '/team',
+      key: "/team",
       icon: <TeamOutlined />,
       label: <Link to="/team">Team</Link>,
     },
   ];
 
+  //   {
+  //   key: '/analytics',
+  //   icon: <BarChartOutlined />,
+  //   label: <Link to="/analytics">Analytics</Link>,
+  // },
+
   const userMenuItems = [
     {
-      key: 'profile',
+      key: "profile",
       icon: <UserOutlined />,
-      label: userProfile?.full_name || 'User',
+      label: userProfile?.full_name || "User",
       disabled: true,
     },
     {
-      type: 'divider' as const,
+      type: "divider" as const,
     },
     {
-      key: 'logout',
+      key: "logout",
       icon: <LogoutOutlined />,
-      label: 'Logout',
+      label: "Logout",
       onClick: handleLogout,
     },
   ];
@@ -116,7 +120,11 @@ export const MainLayout = () => {
       >
         <div className="flex items-center justify-center h-16 border-b border-primary-hover">
           {!collapsed ? (
-            <img src={logo} alt="Compliance First" className="h-10 object-contain" />
+            <img
+              src={logo}
+              alt="Compliance First"
+              className="h-10 object-contain"
+            />
           ) : (
             <div className="text-accent text-2xl font-bold">CF</div>
           )}
@@ -141,10 +149,18 @@ export const MainLayout = () => {
             <NotificationDropdown />
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-                <Avatar src={userProfile?.avatar_url} icon={<UserOutlined />} className="bg-accent" />
+                <Avatar
+                  src={userProfile?.avatar_url}
+                  icon={<UserOutlined />}
+                  className="bg-accent"
+                />
                 <div className="hidden md:block">
-                  <div className="text-sm font-medium text-foreground">{userProfile?.full_name || 'User'}</div>
-                  <div className="text-xs text-muted-foreground">{userProfile?.role || 'Role'}</div>
+                  <div className="text-sm font-medium text-foreground">
+                    {userProfile?.full_name || "User"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {userProfile?.role || "Role"}
+                  </div>
                 </div>
               </div>
             </Dropdown>

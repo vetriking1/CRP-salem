@@ -27,6 +27,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { AutoAssignmentService } from "@/services/autoAssignmentService";
+import { NotificationService } from "@/services/notificationService";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
@@ -245,6 +247,19 @@ export default function TaskDetail() {
         })
         .eq("id", id);
       if (error) throw error;
+
+      // Send notifications to all assigned users and task creator
+      const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
+      const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
+      
+      await NotificationService.notifyTaskStatusChange(
+        task.id,
+        task.title,
+        task.status,
+        'completed',
+        allNotifyUsers.filter(userId => userId !== userProfile?.id)
+      );
+
       toast({ title: "Success", description: "Task marked as completed" });
       fetchTaskDetails();
     } catch (error: any) {
@@ -269,98 +284,17 @@ export default function TaskDetail() {
     teamId: string | null,
     reason: string
   ) => {
-    if (!teamId) return;
+    if (!teamId || !userProfile?.id) return;
     try {
-      // Try manager first for review/other
-      let targetUserId: string | null = null;
-
-      const { data: team } = await supabase
-        .from("teams")
-        .select("id, manager_id")
-        .eq("id", teamId)
-        .single();
-
-      if (reason === "review") {
-        if (team?.manager_id) targetUserId = team.manager_id as string;
-        if (!targetUserId) {
-          // find any manager in team
-          const { data: teamMemberIds } = await supabase
-            .from("team_members")
-            .select("user_id")
-            .eq("team_id", teamId);
-          const userIds = (teamMemberIds || []).map((m: any) => m.user_id);
-          if (userIds.length > 0) {
-            const { data: managers } = await supabase
-              .from("users")
-              .select("id")
-              .in("id", userIds)
-              .eq("role", "manager");
-            if (managers && managers.length > 0) targetUserId = managers[0].id;
-          }
-        }
-      } else if (reason === "data_missing") {
-        const { data: teamMemberIds } = await supabase
-          .from("team_members")
-          .select("user_id")
-          .eq("team_id", teamId);
-        const userIds = (teamMemberIds || []).map((m: any) => m.user_id);
-        if (userIds.length > 0) {
-          const { data: collectors } = (await supabase
-            .from("users")
-            .select("id, specialty, role")
-            .in("id", userIds)
-            .or("role.eq.data_collector,specialty.ilike.%data%")) as any;
-          if (collectors && collectors.length > 0)
-            targetUserId = collectors[0].id;
-        }
-      }
-
-      // Fallback: least busy active team member
-      if (!targetUserId) {
-        const { data: memberRows } = await supabase
-          .from("team_members")
-          .select("user_id")
-          .eq("team_id", teamId);
-        const userIds = (memberRows || []).map((m: any) => m.user_id);
-        if (userIds.length > 0) {
-          const { data: usersData } = await supabase
-            .from("users")
-            .select("id, current_workload_hours, is_active")
-            .in("id", userIds)
-            .eq("is_active", true);
-          const { data: assignmentsData } = await supabase
-            .from("task_assignments")
-            .select("user_id")
-            .eq("is_active", true)
-            .in("user_id", userIds);
-          const assignmentCounts: Record<string, number> = {};
-          (assignmentsData || []).forEach((a: any) => {
-            assignmentCounts[a.user_id] =
-              (assignmentCounts[a.user_id] || 0) + 1;
-          });
-          let bestUserId: string | null = null;
-          let bestScore = Number.POSITIVE_INFINITY;
-          (usersData || []).forEach((u: any) => {
-            const current = Number(u.current_workload_hours || 0) || 0;
-            const assigns = assignmentCounts[u.id] || 0;
-            const score = current + assigns;
-            if (score < bestScore) {
-              bestScore = score;
-              bestUserId = u.id;
-            }
-          });
-          targetUserId = bestUserId;
-        }
-      }
-
-      if (targetUserId && userProfile?.id) {
-        await setActiveAssignmentsFalse(taskId);
-        await supabase.from("task_assignments").insert({
-          task_id: taskId,
-          user_id: targetUserId,
-          assigned_by: userProfile.id,
-          is_active: true,
-        });
+      const assignmentResult = await AutoAssignmentService.assignForPending(
+        taskId,
+        teamId,
+        reason,
+        userProfile.id
+      );
+      
+      if (!assignmentResult.success) {
+        console.warn("Pending assignment failed:", assignmentResult.error);
       }
     } catch (e) {
       console.error("Auto-assign pending failed", e);
@@ -395,6 +329,18 @@ export default function TaskDetail() {
         String(id),
         task?.team_id || null,
         pendingReason
+      );
+
+      // Send notifications to task creator and team managers
+      const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
+      const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
+      
+      await NotificationService.notifyTaskStatusChange(
+        task.id,
+        task.title,
+        task.status,
+        'pending',
+        allNotifyUsers.filter(userId => userId !== userProfile?.id)
       );
 
       toast({ title: "Updated", description: "Task set to pending" });
@@ -478,6 +424,18 @@ export default function TaskDetail() {
         },
         notes: "Task resumed from pending; assignment reverted",
       });
+
+      // Send notifications about status change
+      const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
+      const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
+      
+      await NotificationService.notifyTaskStatusChange(
+        task.id,
+        task.title,
+        'pending',
+        'in_progress',
+        allNotifyUsers.filter(userId => userId !== userProfile?.id)
+      );
 
       toast({ title: "Resumed", description: "Task moved to In Progress" });
       fetchTaskDetails();

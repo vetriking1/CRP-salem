@@ -9,7 +9,7 @@ UPDATE users SET id = 'a1111111-1111-1111-1111-111111111111', email = 'admin@com
 UPDATE users SET id = 'b2222222-2222-2222-2222-222222222222', email = 'collector@company.com' WHERE email = 'mike.datacollector@company.com';
 UPDATE users SET id = 'c3333333-3333-3333-3333-333333333333', email = 'employee@company.com' WHERE email = 'david.employee@company.com';
 UPDATE users SET id = 'd4444444-4444-4444-4444-444444444444', email = 'manager@company.com' WHERE email = 'sarah.manager@company.com';
-UPDATE users SET id = 'e5555555-5555-5555-5555-555555555555', email = 'reviewer@company.com' WHERE email = 'lisa.reviewer@company.com';
+UPDATE users SET id = 'e5555555-5555-5555-5555-555555555555', email = 'senior@company.com' WHERE email = 'lisa.senior@company.com';
 
 -- Create a function to setup demo users (to be called manually or via edge function)
 CREATE OR REPLACE FUNCTION setup_demo_auth_users()
@@ -25,6 +25,6 @@ BEGIN
   RAISE NOTICE 'collector@company.com / collector123';
   RAISE NOTICE 'employee@company.com / employee123';
   RAISE NOTICE 'manager@company.com / manager123';
-  RAISE NOTICE 'reviewer@company.com / reviewer123';
+  RAISE NOTICE 'senior@company.com / senior123';
 END;
 $$;
