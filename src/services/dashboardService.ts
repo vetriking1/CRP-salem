@@ -10,6 +10,7 @@ export type TopPerformer = {
   id: string;
   name: string;
   completed: number;
+  delivered?: number;
   rank: number;
 };
 
@@ -139,55 +140,28 @@ export async function getRecentTasks(): Promise<TaskWithAssignee[]> {
 }
 
 export async function getTopPerformers(): Promise<TopPerformer[]> {
-  // Get completed tasks from last 30 days
-  const { data: completedTasks, error } = await supabase
-    .from('tasks')
-    .select('id')
-    .eq('status', 'completed')
-    .gte('completed_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  // Get top performers directly from users table using the new tasks_completed_count column
+  const { data: topUsers, error } = await supabase
+    .from('users')
+    .select('id, full_name, tasks_completed_count, tasks_delivered_count')
+    .eq('is_active', true)
+    .neq('role', 'admin')
+    .order('tasks_completed_count', { ascending: false })
+    .limit(5);
 
-  if (error || !completedTasks) {
-    console.error('Error fetching top performers data:', error);
+  if (error || !topUsers) {
+    console.error('Error fetching top performers:', error);
     return [];
   }
 
-  const taskIds = completedTasks.map(t => t.id);
-  if (taskIds.length === 0) return [];
-
-  // Get active assignments for these tasks
-  const { data: assignments, error: assignError } = await supabase
-    .from('task_assignments')
-    .select('user_id, users!task_assignments_user_id_fkey(id, full_name)')
-    .in('task_id', taskIds)
-    .eq('is_active', true);
-
-  if (assignError || !assignments) {
-    console.error('Error fetching assignments:', assignError);
-    return [];
-  }
-
-  // Count completions per user
-  const completionCounts: Record<string, { name: string; count: number }> = {};
-  assignments.forEach(assignment => {
-    const userId = assignment.user_id;
-    const userName = assignment.users?.full_name || 'Unknown';
-    if (!completionCounts[userId]) {
-      completionCounts[userId] = { name: userName, count: 0 };
-    }
-    completionCounts[userId].count++;
-  });
-
-  // Convert to array and sort
-  return Object.entries(completionCounts)
-    .map(([id, data]) => ({
-      id,
-      name: data.name,
-      completed: data.count,
-      rank: 0
-    }))
-    .sort((a, b) => b.completed - a.completed)
-    .slice(0, 5)
-    .map((performer, index) => ({ ...performer, rank: index + 1 }));
+  // Format the data for the dashboard
+  return topUsers.map((user, index) => ({
+    id: user.id,
+    name: user.full_name,
+    completed: user.tasks_completed_count || 0,
+    delivered: user.tasks_delivered_count || 0, // Add delivered count
+    rank: index + 1
+  }));
 }
 
 export async function getRecentActivity(): Promise<ActivityItem[]> {

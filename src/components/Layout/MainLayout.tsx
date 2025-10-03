@@ -102,6 +102,12 @@ export const MainLayout = () => {
       type: "divider" as const,
     },
     {
+      key: "notification-settings",
+      icon: <SettingOutlined />,
+      label: "Notification Settings",
+      onClick: () => navigate("/settings/notifications"),
+    },
+    {
       key: "logout",
       icon: <LogoutOutlined />,
       label: "Logout",

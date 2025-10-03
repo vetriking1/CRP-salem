@@ -158,13 +158,24 @@ export default function Dashboard() {
       render: (text: string) => <span className="font-medium">{text}</span>,
     },
     {
-      title: "Tasks Completed",
+      title: "Completed",
       dataIndex: "completed",
       key: "completed",
       render: (value: number) => (
         <Space>
           <span className="font-bold text-accent">{value}</span>
-          <RiseOutlined className="text-success" />
+          <CheckCircleOutlined className="text-success" />
+        </Space>
+      ),
+    },
+    {
+      title: "Delivered",
+      dataIndex: "delivered",
+      key: "delivered",
+      render: (value: number) => (
+        <Space>
+          <span className="font-bold text-primary">{value || 0}</span>
+          <RiseOutlined className="text-primary" />
         </Space>
       ),
     },

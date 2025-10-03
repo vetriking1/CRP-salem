@@ -31,16 +31,20 @@ export class NotificationService {
    */
   static async createNotification(params: CreateNotificationParams): Promise<string | null> {
     try {
-      const { data, error } = await supabase.rpc('create_notification', {
-        p_user_id: params.userId,
-        p_task_id: params.taskId || null,
-        p_type: params.type,
-        p_title: params.title,
-        p_message: params.message || null,
-      });
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: params.userId,
+          task_id: params.taskId || null,
+          type: params.type,
+          title: params.title,
+          message: params.message || null,
+        })
+        .select('id')
+        .single();
 
       if (error) throw error;
-      return data;
+      return data?.id || null;
     } catch (error) {
       console.error('Error creating notification:', error);
       return null;
@@ -229,20 +233,57 @@ export class NotificationService {
   }
 
   /**
-   * Notify user when assigned to a task
+   * Notify user when assigned to a task (Enhanced version)
    */
   static async notifyTaskAssignment(
     userId: string,
     taskId: string,
-    taskTitle: string
+    taskTitle: string,
+    options?: {
+      channels?: Array<'database' | 'push' | 'email' | 'sms'>;
+      userEmail?: string;
+      userPhone?: string;
+    }
   ): Promise<void> {
-    await this.createNotification({
-      userId,
-      taskId,
-      type: 'task_assigned',
-      title: 'Task Assigned to You',
-      message: `You have been assigned to task: "${taskTitle}"`,
-    });
+    // Use enhanced notification service if available
+    if (options?.channels && options.channels.length > 1) {
+      const { SupabaseNotificationService } = await import('./supabaseNotificationService');
+      
+      await SupabaseNotificationService.createEnhancedNotification({
+        userId,
+        taskId,
+        type: 'task_assigned',
+        title: 'Task Assigned to You',
+        message: `You have been assigned to task: "${taskTitle}"`,
+        channels: options.channels,
+        pushPayload: {
+          title: 'New Task Assignment',
+          body: `You've been assigned to: ${taskTitle}`,
+          icon: '/icon.jpg',
+          data: { taskId, type: 'task_assigned' },
+          actions: [
+            { action: 'view', title: 'View Task' },
+            { action: 'dismiss', title: 'Dismiss' }
+          ]
+        },
+        emailParams: {
+          subject: 'New Task Assignment - Flowchart Pilot',
+          html: `<p>You have been assigned to a new task: <strong>${taskTitle}</strong></p>`,
+        },
+        smsMessage: `New task assigned: ${taskTitle}`,
+        userEmail: options.userEmail,
+        userPhone: options.userPhone,
+      });
+    } else {
+      // Fallback to standard notification
+      await this.createNotification({
+        userId,
+        taskId,
+        type: 'task_assigned',
+        title: 'Task Assigned to You',
+        message: `You have been assigned to task: "${taskTitle}"`,
+      });
+    }
   }
 
   /**
@@ -250,8 +291,32 @@ export class NotificationService {
    */
   static async notifyDueSoonTasks(): Promise<void> {
     try {
-      // This would typically be called by a scheduled job
-      await supabase.rpc('check_due_soon_tasks');
+      // Get tasks due within 24 hours
+      const { data: dueSoonTasks, error } = await supabase
+        .from('tasks')
+        .select(`
+          id,
+          title,
+          due_date,
+          task_assignments!inner(user_id)
+        `)
+        .gte('due_date', new Date().toISOString())
+        .lte('due_date', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+        .eq('status', 'assigned');
+
+      if (error) throw error;
+
+      for (const task of dueSoonTasks || []) {
+        for (const assignment of task.task_assignments) {
+          await this.createNotification({
+            userId: assignment.user_id,
+            taskId: task.id,
+            type: 'task_due_soon',
+            title: 'Task Due Soon',
+            message: `Task "${task.title}" is due within 24 hours`,
+          });
+        }
+      }
     } catch (error) {
       console.error('Error checking due soon tasks:', error);
     }
@@ -262,8 +327,31 @@ export class NotificationService {
    */
   static async notifyOverdueTasks(): Promise<void> {
     try {
-      // This would typically be called by a scheduled job
-      await supabase.rpc('check_overdue_tasks');
+      // Get overdue tasks
+      const { data: overdueTasks, error } = await supabase
+        .from('tasks')
+        .select(`
+          id,
+          title,
+          due_date,
+          task_assignments!inner(user_id)
+        `)
+        .lt('due_date', new Date().toISOString())
+        .in('status', ['assigned', 'in_progress']);
+
+      if (error) throw error;
+
+      for (const task of overdueTasks || []) {
+        for (const assignment of task.task_assignments) {
+          await this.createNotification({
+            userId: assignment.user_id,
+            taskId: task.id,
+            type: 'task_overdue',
+            title: 'Task Overdue',
+            message: `Task "${task.title}" is overdue`,
+          });
+        }
+      }
     } catch (error) {
       console.error('Error checking overdue tasks:', error);
     }

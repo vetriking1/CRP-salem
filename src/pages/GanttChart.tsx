@@ -286,6 +286,94 @@ export default function GanttChart() {
         </Select>
       </div>
 
+      {/* Status Legend */}
+      <Card className="border-border">
+        <div className="p-4">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <div className="w-2 h-2 bg-primary rounded-full"></div>
+            Task Status Legend
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div 
+                className="w-3 h-3 rounded-full shadow-sm" 
+                style={{ backgroundColor: statusColors.not_started }}
+              />
+              <div>
+                <div className="text-xs font-medium">Not Started</div>
+                <div className="text-xs text-muted-foreground">New tasks</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div 
+                className="w-3 h-3 rounded-full shadow-sm" 
+                style={{ backgroundColor: statusColors.assigned }}
+              />
+              <div>
+                <div className="text-xs font-medium">Assigned</div>
+                <div className="text-xs text-muted-foreground">Ready to start</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div 
+                className="w-3 h-3 rounded-full shadow-sm" 
+                style={{ backgroundColor: statusColors.in_progress }}
+              />
+              <div>
+                <div className="text-xs font-medium">In Progress</div>
+                <div className="text-xs text-muted-foreground">Active work</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div 
+                className="w-3 h-3 rounded-full shadow-sm" 
+                style={{ backgroundColor: statusColors.pending }}
+              />
+              <div>
+                <div className="text-xs font-medium">Pending</div>
+                <div className="text-xs text-muted-foreground">Blocked/waiting</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div 
+                className="w-3 h-3 rounded-full shadow-sm" 
+                style={{ backgroundColor: statusColors.review }}
+              />
+              <div>
+                <div className="text-xs font-medium">Review</div>
+                <div className="text-xs text-muted-foreground">Under review</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div 
+                className="w-3 h-3 rounded-full shadow-sm" 
+                style={{ backgroundColor: statusColors.completed }}
+              />
+              <div>
+                <div className="text-xs font-medium">Completed</div>
+                <div className="text-xs text-muted-foreground">Work done</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div 
+                className="w-3 h-3 rounded-full shadow-sm" 
+                style={{ backgroundColor: statusColors.delivered }}
+              />
+              <div>
+                <div className="text-xs font-medium">Delivered</div>
+                <div className="text-xs text-muted-foreground">Finalized</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       <Card className="border-border overflow-x-auto">
         {loading ? (
           <div className="flex justify-center items-center h-64">
@@ -368,44 +456,7 @@ export default function GanttChart() {
         )}
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: statusColors.in_progress }} />
-            <div>
-              <div className="text-sm font-medium">In Progress</div>
-              <div className="text-xs text-muted-foreground">Active tasks</div>
-            </div>
-          </div>
-        </Card>
-        <Card className="border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: statusColors.pending }} />
-            <div>
-              <div className="text-sm font-medium">Pending</div>
-              <div className="text-xs text-muted-foreground">Awaiting data</div>
-            </div>
-          </div>
-        </Card>
-        <Card className="border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: statusColors.review }} />
-            <div>
-              <div className="text-sm font-medium">Review</div>
-              <div className="text-xs text-muted-foreground">Under review</div>
-            </div>
-          </div>
-        </Card>
-        <Card className="border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: statusColors.completed }} />
-            <div>
-              <div className="text-sm font-medium">Completed</div>
-              <div className="text-xs text-muted-foreground">Done tasks</div>
-            </div>
-          </div>
-        </Card>
-      </div>
+      
     </div>
   );
 }

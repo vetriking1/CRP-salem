@@ -19,6 +19,7 @@ import {
   ClockCircleOutlined,
   ExclamationCircleOutlined,
   ReloadOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,6 +54,10 @@ export default function Tasks() {
     undefined
   );
   const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
+  // "My Tasks" filter - default ON for employees
+  const [showMyTasksOnly, setShowMyTasksOnly] = useState<boolean>(
+    userProfile?.role === "employee" || userProfile?.role === "senior"
+  );
 
   useEffect(() => {
     fetchTasks();
@@ -140,6 +145,13 @@ export default function Tasks() {
     const matchesTemplate =
       !templateFilter || task.template_id === templateFilter;
 
+    // "My Tasks" filter - show only tasks assigned to current user
+    const matchesMyTasks =
+      !showMyTasksOnly ||
+      task.task_assignments?.some(
+        (a: any) => a.user_id === userProfile?.id && a.is_active
+      );
+
     // Due date filter
     let matchesDueDate = true;
     if (dueDateFilter) {
@@ -166,7 +178,8 @@ export default function Tasks() {
       matchesStatus &&
       matchesPriority &&
       matchesTemplate &&
-      matchesDueDate
+      matchesDueDate &&
+      matchesMyTasks
     );
   });
 
@@ -433,6 +446,18 @@ export default function Tasks() {
               <Option value="due_today">Due Today</Option>
               <Option value="due_soon">Due Soon</Option>
             </Select>
+
+            {(userProfile?.role === "employee" ||
+              userProfile?.role === "senior" ||
+              userProfile?.role === "manager") && (
+              <Button
+                type={showMyTasksOnly ? "primary" : "default"}
+                icon={<UserOutlined />}
+                onClick={() => setShowMyTasksOnly(!showMyTasksOnly)}
+              >
+                {showMyTasksOnly ? "My Tasks" : "All Tasks"}
+              </Button>
+            )}
 
             <Badge count={filteredTasks.length} showZero>
               <Button>Total Tasks</Button>

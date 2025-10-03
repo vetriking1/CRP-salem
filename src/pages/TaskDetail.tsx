@@ -29,6 +29,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { AutoAssignmentService } from "@/services/autoAssignmentService";
 import { NotificationService } from "@/services/notificationService";
+import { SupabaseNotificationService } from "@/services/supabaseNotificationService";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
@@ -57,7 +58,13 @@ export default function TaskDetail() {
   const [pendingNotes, setPendingNotes] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [dataFiles, setDataFiles] = useState<FileList | null>(null);
-  
+
+  // Reassignment states
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
   // Review workflow states
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewNotes, setReviewNotes] = useState<string>("");
@@ -67,6 +74,13 @@ export default function TaskDetail() {
   useEffect(() => {
     fetchTaskDetails();
   }, []);
+
+  // Fetch available users when reassign modal opens
+  useEffect(() => {
+    if (reassignModalOpen && task?.team_id) {
+      fetchAvailableUsers();
+    }
+  }, [reassignModalOpen, task?.team_id]);
 
   // Update isAssigned when userProfile or task changes
   useEffect(() => {
@@ -90,6 +104,8 @@ export default function TaskDetail() {
           created_by_user:users!tasks_created_by_fkey(full_name, avatar_url),
           task_assignments(
             user_id,
+            is_primary,
+            is_active,
             users!task_assignments_user_id_fkey(full_name, avatar_url, role)
           )
         `
@@ -181,13 +197,16 @@ export default function TaskDetail() {
             status: "in_progress",
           })
           .eq("id", id);
-        
+
         if (taskUpdateError) throw taskUpdateError;
-        
+
         // Send notifications to all assigned users and task creator
-        const assignedUsers = task.task_assignments?.map((a: any) => a.user_id) || [];
-        const allNotifyUsers = [...new Set([...assignedUsers, task.created_by])];
-        
+        const assignedUsers =
+          task.task_assignments?.map((a: any) => a.user_id) || [];
+        const allNotifyUsers = [
+          ...new Set([...assignedUsers, task.created_by]),
+        ];
+
         await NotificationService.notifyTaskStatusChange(
           task.id,
           task.title,
@@ -310,11 +329,11 @@ export default function TaskDetail() {
       });
     }
   };
-  
+
   // Function to assign task to a senior or manager for review
   const assignForReview = async (taskId: string, teamId: string | null) => {
     if (!userProfile?.id || !teamId) return;
-    
+
     try {
       // Store the current assignee before deactivating
       const { data: currentAssignments } = await supabase
@@ -322,29 +341,30 @@ export default function TaskDetail() {
         .select("user_id")
         .eq("task_id", taskId)
         .eq("is_active", true);
-        
-      const currentAssigneeId = currentAssignments && currentAssignments.length > 0 
-        ? currentAssignments[0].user_id 
-        : null;
-      
+
+      const currentAssigneeId =
+        currentAssignments && currentAssignments.length > 0
+          ? currentAssignments[0].user_id
+          : null;
+
       // Deactivate current assignments
       await supabase
         .from("task_assignments")
         .update({ is_active: false })
         .eq("task_id", taskId)
         .eq("is_active", true);
-      
-      // Store the original assignee in task metadata
-      await supabase
-        .from("tasks")
-        .update({ 
-          metadata: { 
-            original_assignee: currentAssigneeId,
-            review_requested_at: new Date().toISOString()
-          } 
-        })
-        .eq("id", taskId);
-      
+
+      // Store the original assignee in task metadata (commented out as metadata field doesn't exist)
+      // await supabase
+      //   .from("tasks")
+      //   .update({
+      //     metadata: {
+      //       original_assignee: currentAssigneeId,
+      //       review_requested_at: new Date().toISOString(),
+      //     },
+      //   })
+      //   .eq("id", taskId);
+
       // Use AutoAssignmentService to find a reviewer
       const assignmentResult = await AutoAssignmentService.assignForPending(
         taskId,
@@ -360,7 +380,7 @@ export default function TaskDetail() {
       console.error("Auto-assign for review failed", e);
     }
   };
-  
+
   // Function to mark review as complete
   const handleReviewDone = async () => {
     if (!isAssigned) {
@@ -371,7 +391,7 @@ export default function TaskDetail() {
       });
       return;
     }
-    
+
     try {
       // Update task status to completed
       const { error } = await supabase
@@ -381,7 +401,17 @@ export default function TaskDetail() {
         })
         .eq("id", id);
       if (error) throw error;
-      
+
+      // Add task history entry for completion
+      await supabase.from("task_history").insert({
+        task_id: id,
+        user_id: userProfile?.id,
+        action: "task_completed",
+        old_value: { status: "review" },
+        new_value: { status: "completed" },
+        notes: `Task completed after review by ${userProfile?.full_name}`,
+      });
+
       // Send notifications to all assigned users and task creator
       const assignedUsers =
         task.task_assignments?.map((a: any) => a.user_id) || [];
@@ -394,8 +424,11 @@ export default function TaskDetail() {
         "completed",
         allNotifyUsers.filter((userId) => userId !== userProfile?.id)
       );
-      
-      toast({ title: "Success", description: "Review completed and task marked as done" });
+
+      toast({
+        title: "Success",
+        description: "Review completed and task marked as done",
+      });
       setReviewModalOpen(false);
       setReviewNotes("");
       fetchTaskDetails();
@@ -407,7 +440,7 @@ export default function TaskDetail() {
       });
     }
   };
-  
+
   // Function to request changes after review
   const handleRequestChanges = async () => {
     if (!isAssigned) {
@@ -418,7 +451,7 @@ export default function TaskDetail() {
       });
       return;
     }
-    
+
     if (!changeRequestNotes.trim()) {
       toast({
         title: "Missing Information",
@@ -427,7 +460,7 @@ export default function TaskDetail() {
       });
       return;
     }
-    
+
     try {
       // Get the original assignee from task_assignments table (the assignee before the current reviewer)
       // We need to find the most recent non-active assignment (the one before the current active assignment)
@@ -436,7 +469,7 @@ export default function TaskDetail() {
         .select("user_id, assigned_at, is_active")
         .eq("task_id", id)
         .order("assigned_at", { ascending: false });
-      
+
       if (!allAssignments || allAssignments.length === 0) {
         toast({
           title: "Error",
@@ -445,10 +478,12 @@ export default function TaskDetail() {
         });
         return;
       }
-      
+
       // Find the original assignee (the most recent non-active assignment before the current active one)
-      const originalAssigneeId = allAssignments.find((assignment: any) => !assignment.is_active)?.user_id;
-      
+      const originalAssigneeId = allAssignments.find(
+        (assignment: any) => !assignment.is_active
+      )?.user_id;
+
       if (!originalAssigneeId) {
         toast({
           title: "Error",
@@ -457,35 +492,54 @@ export default function TaskDetail() {
         });
         return;
       }
-      
-      // Deactivate current assignments (reviewer)
-      await supabase
+
+      // Check if the original assignee is the same as current reviewer
+      const { data: currentActiveAssignments } = await supabase
         .from("task_assignments")
-        .update({ is_active: false })
+        .select("user_id, is_primary")
         .eq("task_id", id)
         .eq("is_active", true);
-      
-      // Create new assignment for the original assignee
-      await supabase
-        .from("task_assignments")
-        .insert({
+
+      const currentReviewerId = currentActiveAssignments?.find(a => !a.is_primary)?.user_id;
+      const isSamePerson = originalAssigneeId === currentReviewerId;
+
+      if (isSamePerson) {
+        // Same person for both roles - just update their assignment to primary
+        await supabase
+          .from("task_assignments")
+          .update({ is_primary: true })
+          .eq("task_id", id)
+          .eq("user_id", originalAssigneeId)
+          .eq("is_active", true);
+      } else {
+        // Different people - deactivate reviewer and restore original assignee
+        await supabase
+          .from("task_assignments")
+          .update({ is_active: false })
+          .eq("task_id", id)
+          .eq("is_active", true);
+
+        // Create new assignment for the original assignee (restore as primary)
+        await supabase.from("task_assignments").insert({
           task_id: id,
           user_id: originalAssigneeId,
           assigned_by: userProfile?.id,
           is_active: true,
+          is_primary: true,
         });
-      
+      }
+
       // Add the change request as a subtask
-      await supabase
-        .from("subtasks")
-        .insert({
-          task_id: id,
-          title: `Review changes: ${changeRequestNotes}`,
-          description: `Changes requested by ${userProfile?.full_name} on ${new Date().toLocaleDateString()}`,
-          is_done: false,
-          sort_order: (subtasks.length + 1) * 10,
-        });
-      
+      await supabase.from("subtasks").insert({
+        task_id: id,
+        title: `Review changes: ${changeRequestNotes}`,
+        description: `Changes requested by ${
+          userProfile?.full_name
+        } on ${new Date().toLocaleDateString()}`,
+        is_done: false,
+        sort_order: (subtasks.length + 1) * 10,
+      });
+
       // Update task status back to in_progress
       const { error } = await supabase
         .from("tasks")
@@ -493,8 +547,8 @@ export default function TaskDetail() {
           status: "in_progress",
         })
         .eq("id", id);
-      if (error) throw error; 
-      
+      if (error) throw error;
+
       // Send notifications
       await NotificationService.notifyTaskStatusChange(
         task.id,
@@ -503,8 +557,11 @@ export default function TaskDetail() {
         "in_progress",
         [originalAssigneeId]
       );
-      
-      toast({ title: "Success", description: "Changes requested and task reassigned" });
+
+      toast({
+        title: "Success",
+        description: "Changes requested and task reassigned",
+      });
       setChangeRequestModalOpen(false);
       setChangeRequestNotes("");
       fetchTaskDetails();
@@ -526,7 +583,7 @@ export default function TaskDetail() {
       });
       return;
     }
-    
+
     try {
       const { error } = await supabase
         .from("tasks")
@@ -535,6 +592,16 @@ export default function TaskDetail() {
         })
         .eq("id", id);
       if (error) throw error;
+
+      // Add task history entry for delivery
+      await supabase.from("task_history").insert({
+        task_id: id,
+        user_id: userProfile?.id,
+        action: "task_delivered",
+        old_value: { status: "completed" },
+        new_value: { status: "delivered" },
+        notes: `Task delivered by ${userProfile?.full_name}`,
+      });
 
       // Send notifications to all assigned users and task creator
       const assignedUsers =
@@ -549,7 +616,10 @@ export default function TaskDetail() {
         allNotifyUsers.filter((userId) => userId !== userProfile?.id)
       );
 
-      toast({ title: "Success", description: "Payment completed and task delivered" });
+      toast({
+        title: "Success",
+        description: "Payment completed and task delivered",
+      });
       fetchTaskDetails();
     } catch (error: any) {
       toast({
@@ -574,31 +644,57 @@ export default function TaskDetail() {
     reason: string
   ) => {
     if (!userProfile?.id) return;
-    
+
     try {
       // For data_missing pending reason, assign to the task creator
       if (reason === "data_missing" && task.created_by) {
-        // Deactivate current assignments
-        await supabase
+        // Check if task creator is already assigned
+        const { data: existingAssignments } = await supabase
           .from("task_assignments")
-          .update({ is_active: false })
+          .select("user_id, is_primary")
           .eq("task_id", taskId)
           .eq("is_active", true);
-          
-        // Create new assignment for the task creator
-        const { error: assignError } = await supabase
-          .from("task_assignments")
-          .insert({
-            task_id: taskId,
-            user_id: task.created_by,
-            assigned_by: userProfile.id,
-            is_active: true,
-          });
-          
-        if (assignError) throw assignError;
-        
-        console.log(`Task assigned to creator (${task.created_by}) for data collection`);
-      } 
+
+        const isCreatorAlreadyAssigned = existingAssignments?.some(
+          (a: any) => a.user_id === task.created_by
+        );
+
+        if (isCreatorAlreadyAssigned) {
+          // Creator is already assigned - add a secondary assignment for pending issue
+          const { error: assignError } = await supabase
+            .from("task_assignments")
+            .insert({
+              task_id: taskId,
+              user_id: task.created_by,
+              assigned_by: userProfile.id,
+              is_active: true,
+              is_primary: false, // Secondary for handling pending issue
+            });
+          if (assignError) throw assignError;
+        } else {
+          // Creator not assigned - deactivate current and assign creator for pending
+          await supabase
+            .from("task_assignments")
+            .update({ is_active: false })
+            .eq("task_id", taskId)
+            .eq("is_active", true);
+
+          const { error: assignError } = await supabase
+            .from("task_assignments")
+            .insert({
+              task_id: taskId,
+              user_id: task.created_by,
+              assigned_by: userProfile.id,
+              is_active: true,
+              is_primary: false,
+            });
+          if (assignError) throw assignError;
+        }
+
+        console.log(
+          `Task assigned to creator (${task.created_by}) for data collection`
+        );
+      }
       // For review and clarity_needed, use the AutoAssignmentService
       else if (teamId) {
         const assignmentResult = await AutoAssignmentService.assignForPending(
@@ -689,7 +785,7 @@ export default function TaskDetail() {
         pending_reason: task.pending_reason,
         pending_notes: task.pending_notes,
       };
-      
+
       // 1) Fetch all assignments (latest first)
       const { data: assignments, error: fetchAssignErr } = await supabase
         .from("task_assignments")
@@ -700,13 +796,17 @@ export default function TaskDetail() {
 
       // Find the current active assignment (the pending assignee)
       const currentActive = (assignments || []).find((a: any) => a.is_active);
-      
+
       // Find the original assignee (the one before the pending assignee)
       // We need to find the most recent non-active assignment that isn't the current active one
       const originalAssignee = (assignments || [])
         .filter((a: any) => !a.is_active)
-        .sort((a: any, b: any) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime())[0];
-      
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.assigned_at).getTime() -
+            new Date(a.assigned_at).getTime()
+        )[0];
+
       // For data_missing pending reason, completely remove all assignments
       if (task.pending_reason === "data_missing") {
         // Deactivate ALL assignments for this task
@@ -714,7 +814,7 @@ export default function TaskDetail() {
           .from("task_assignments")
           .update({ is_active: false })
           .eq("task_id", id);
-        
+
         // Update task status to not_started since no one is assigned
         const { error } = await supabase
           .from("tasks")
@@ -725,7 +825,7 @@ export default function TaskDetail() {
           })
           .eq("id", id);
         if (error) throw error;
-        
+
         // Add task history entry
         await supabase.from("task_history").insert({
           task_id: id,
@@ -738,7 +838,7 @@ export default function TaskDetail() {
           },
           notes: "Task resumed from data collection; all assignments removed",
         });
-      } 
+      }
       // For other pending reasons (review, clarity_needed), restore only the original assignee
       else {
         // Deactivate ALL assignments for this task first
@@ -747,24 +847,73 @@ export default function TaskDetail() {
           .update({ is_active: false })
           .eq("task_id", id);
 
-        // If there was an original assignee, reactivate only that one
+        // If there was an original assignee, restore them as primary
         if (originalAssignee) {
-          await supabase
-            .from("task_assignments")
-            .update({ is_active: true })
-            .eq("id", originalAssignee.id);
-            
-          // Update task status to in_progress
+          // Check if the original assignee is the same as the pending handler
+          const isSamePerson = originalAssignee.user_id === currentActive?.user_id;
+          
+          if (isSamePerson) {
+            // Same person - just update their existing assignment to primary
+            await supabase
+              .from("task_assignments")
+              .update({ 
+                is_active: true,
+                is_primary: true 
+              })
+              .eq("task_id", id)
+              .eq("user_id", originalAssignee.user_id)
+              .eq("is_active", false); // Update the most recent inactive one
+          } else {
+            // Different people - create new primary assignment for original assignee
+            await supabase.from("task_assignments").insert({
+              task_id: id,
+              user_id: originalAssignee.user_id,
+              assigned_by: userProfile?.id,
+              is_active: true,
+              is_primary: true,
+            });
+          }
+
+          // Determine the appropriate status based on task progress
+          let newStatus: "in_progress" | "review" = "in_progress";
+          
+          // If task was in review before pending, restore to review
+          if (task.pending_reason === "review" || task.pending_reason === "clarity_needed") {
+            // Check if all subtasks are completed to determine if it should go back to review
+            const completedSubtasks = subtasks.filter((s: any) => s.is_done).length;
+            if (completedSubtasks === subtasks.length && subtasks.length > 0) {
+              newStatus = "review";
+              
+              // For review status, we need a reviewer assignment
+              if (!isSamePerson) {
+                // Assign a reviewer (use auto-assignment service)
+                const teamId = task.team_id;
+                if (teamId) {
+                  const assignmentResult = await AutoAssignmentService.assignForPending(
+                    id,
+                    teamId,
+                    "review",
+                    userProfile?.id || ""
+                  );
+                  if (!assignmentResult.success) {
+                    console.warn("Review assignment failed:", assignmentResult.error);
+                  }
+                }
+              }
+            }
+          }
+          
+          // Update task status
           const { error } = await supabase
             .from("tasks")
             .update({
-              status: "in_progress",
+              status: newStatus,
               pending_reason: null,
               pending_notes: null,
             })
             .eq("id", id);
           if (error) throw error;
-            
+
           // Add task history entry
           await supabase.from("task_history").insert({
             task_id: id,
@@ -788,7 +937,7 @@ export default function TaskDetail() {
             })
             .eq("id", id);
           if (error) throw error;
-            
+
           // Add task history entry
           await supabase.from("task_history").insert({
             task_id: id,
@@ -817,11 +966,12 @@ export default function TaskDetail() {
         allNotifyUsers.filter((userId) => userId !== userProfile?.id)
       );
 
-      toast({ 
-        title: "Resumed", 
-        description: task.pending_reason === "data_missing" 
-          ? "Task moved to Not Started and unassigned" 
-          : "Task moved to In Progress" 
+      toast({
+        title: "Resumed",
+        description:
+          task.pending_reason === "data_missing"
+            ? "Task moved to Not Started and unassigned"
+            : "Task moved to In Progress",
       });
       fetchTaskDetails();
     } catch (e: any) {
@@ -888,6 +1038,205 @@ export default function TaskDetail() {
       toast({
         title: "Error",
         description: "Failed to download file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Fetch available users for reassignment
+  const fetchAvailableUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      // Fetch team members if task has a team
+      if (task?.team_id) {
+        const { data: teamMembers, error } = await supabase
+          .from("team_members")
+          .select(
+            `
+            user_id,
+            users!team_members_user_id_fkey(
+              id,
+              full_name,
+              avatar_url,
+              role,
+              is_active,
+              current_task_count
+            )
+          `
+          )
+          .eq("team_id", task.team_id);
+
+        if (error) throw error;
+
+        // Filter active users and format the data
+        const users = (teamMembers || [])
+          .map((tm: any) => tm.users)
+          .filter((u: any) => u && u.is_active && u.role !== "admin");
+
+        setAvailableUsers(users);
+      } else {
+        // If no team, fetch all active users except admins
+        const { data: users, error } = await supabase
+          .from("users")
+          .select(
+            "id, full_name, avatar_url, role, is_active, current_task_count"
+          )
+          .eq("is_active", true)
+          .neq("role", "admin");
+
+        if (error) throw error;
+        setAvailableUsers(users || []);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load users",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // Handle task reassignment
+  const handleReassignTask = async () => {
+    // Check if user is manager or admin
+    if (userProfile?.role !== "manager" && userProfile?.role !== "admin") {
+      toast({
+        title: "Not Authorized",
+        description: "Only managers and admins can reassign tasks",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedUserId) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a user to assign",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Get current assignment info for history
+      const currentAssignee = task.task_assignments?.find(
+        (a: any) => a.is_active
+      );
+
+      // Deactivate current assignments
+      await supabase
+        .from("task_assignments")
+        .update({ is_active: false })
+        .eq("task_id", id)
+        .eq("is_active", true);
+
+      // Create new assignment as primary
+      const { error: assignError } = await supabase
+        .from("task_assignments")
+        .insert({
+          task_id: id,
+          user_id: selectedUserId,
+          assigned_by: userProfile?.id,
+          is_active: true,
+          is_primary: true,
+        });
+
+      if (assignError) throw assignError;
+
+      // Update task status to assigned if it was not_started
+      if (task.status === "not_started") {
+        await supabase
+          .from("tasks")
+          .update({ status: "assigned" })
+          .eq("id", id);
+      }
+
+      // Add task history entry
+      await supabase.from("task_history").insert({
+        task_id: id,
+        user_id: userProfile?.id,
+        action: "reassign",
+        old_value: {
+          user_id: currentAssignee?.user_id || null,
+        },
+        new_value: {
+          user_id: selectedUserId,
+        },
+        notes: `Task reassigned by ${userProfile?.full_name}`,
+      });
+
+      // Send enhanced notification to new assignee
+      try {
+        // Get user details for enhanced notification
+        const { data: userData } = await supabase
+          .from('users')
+          .select('email, phone')
+          .eq('id', selectedUserId)
+          .single();
+
+        await SupabaseNotificationService.createEnhancedNotification({
+          userId: selectedUserId,
+          taskId: task.id,
+          type: 'task_assigned',
+          title: 'Task Assigned to You',
+          message: `You have been assigned to task: "${task.title}"`,
+          channels: ['database', 'push', 'email'],
+          pushPayload: {
+            title: 'New Task Assignment',
+            body: `You've been assigned to: ${task.title}`,
+            icon: '/icon.jpg',
+            data: { taskId: task.id, type: 'task_assigned' },
+            actions: [
+              { action: 'view', title: 'View Task' },
+              { action: 'dismiss', title: 'Dismiss' }
+            ]
+          },
+          emailParams: {
+            subject: 'New Task Assignment - Flowchart Pilot',
+            html: `<p>You have been assigned to a new task: <strong>${task.title}</strong></p>
+                   <p>Priority: ${task.priority}</p>
+                   <p>Due Date: ${task.due_date ? dayjs(task.due_date).format('MMMM D, YYYY') : 'Not set'}</p>`,
+          },
+          userEmail: userData?.email,
+        });
+      } catch (enhancedError) {
+        console.warn('Enhanced notification failed, falling back to basic:', enhancedError);
+        // Fallback to basic notification
+        await NotificationService.notifyTaskAssignment(
+          selectedUserId,
+          task.id,
+          task.title
+        );
+      }
+
+      // Notify previous assignee if exists
+      if (
+        currentAssignee?.user_id &&
+        currentAssignee.user_id !== selectedUserId
+      ) {
+        await supabase.from("notifications").insert({
+          user_id: currentAssignee.user_id,
+          task_id: task.id,
+          type: "task_status_changed",
+          title: "Task Reassigned",
+          message: `Task "${task.title}" has been reassigned to another user`,
+        });
+      }
+
+      toast({
+        title: "Success",
+        description: "Task reassigned successfully",
+      });
+
+      setReassignModalOpen(false);
+      setSelectedUserId(undefined);
+      fetchTaskDetails();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
         variant: "destructive",
       });
     }
@@ -974,16 +1323,22 @@ export default function TaskDetail() {
             )}
             {task.status === "review" && (
               <>
-                {(userProfile?.role === "senior" || userProfile?.role === "manager" || userProfile?.role === "admin") && isAssigned && (
-                  <>
-                    <Button type="primary" onClick={() => setReviewModalOpen(true)}>
-                      Review Done
-                    </Button>
-                    <Button onClick={() => setChangeRequestModalOpen(true)}>
-                      Request Changes
-                    </Button>
-                  </>
-                )}
+                {(userProfile?.role === "senior" ||
+                  userProfile?.role === "manager" ||
+                  userProfile?.role === "admin") &&
+                  isAssigned && (
+                    <>
+                      <Button
+                        type="primary"
+                        onClick={() => setReviewModalOpen(true)}
+                      >
+                        Review Done
+                      </Button>
+                      <Button onClick={() => setChangeRequestModalOpen(true)}>
+                        Request Changes
+                      </Button>
+                    </>
+                  )}
               </>
             )}
             {task.status === "completed" && (
@@ -991,7 +1346,9 @@ export default function TaskDetail() {
                 Payment Done
               </Button>
             )}
-            {![ "pending", "review", "completed", "delivered"].includes(task.status) && (
+            {!["pending", "review", "completed", "delivered"].includes(
+              task.status
+            ) && (
               <Button onClick={() => setPendingModalOpen(true)}>
                 Set Pending
               </Button>
@@ -1152,29 +1509,178 @@ export default function TaskDetail() {
         </div>
 
         <div className="space-y-6">
-          <Card title="Assigned To">
+          <Card
+            title="Assigned To"
+            extra={
+              (userProfile?.role === "manager" ||
+                userProfile?.role === "admin") && (
+                <Button size="small" onClick={() => setReassignModalOpen(true)}>
+                  Reassign
+                </Button>
+              )
+            }
+          >
             <Space direction="vertical" className="w-full">
-              {task.task_assignments?.map((assignment: any, index: number) => (
-                <div key={index} className="flex items-center gap-3">
-                  <Avatar
-                    src={assignment.users?.avatar_url}
-                    icon={<UserOutlined />}
-                  />
-                  <div>
-                    <div className="font-medium">
-                      {assignment.users?.full_name}
+              {(() => {
+                let relevantAssignments = task.task_assignments || [];
+                
+                // For completed/delivered tasks, show recent assignments (not just active)
+                if (task.status === "completed" || task.status === "delivered") {
+                  // Get the most recent assignments (both active and recent inactive)
+                  const sortedAssignments = relevantAssignments
+                    .sort((a: any, b: any) => new Date(b.assigned_at || b.created_at).getTime() - new Date(a.assigned_at || a.created_at).getTime());
+                  
+                  // Include active assignments and the most recent primary assignment
+                  const activeAssignments = sortedAssignments.filter((a: any) => a.is_active);
+                  const recentPrimaryAssignment = sortedAssignments.find((a: any) => a.is_primary && !a.is_active);
+                  
+                  relevantAssignments = [...activeAssignments];
+                  if (recentPrimaryAssignment && !activeAssignments.some((a: any) => a.user_id === recentPrimaryAssignment.user_id)) {
+                    relevantAssignments.push(recentPrimaryAssignment);
+                  }
+                } else {
+                  // For other statuses, only show active assignments
+                  relevantAssignments = relevantAssignments.filter((a: any) => a.is_active);
+                }
+                
+                // Group assignments by user to detect multiple roles
+                const userAssignments = relevantAssignments.reduce((acc: any, assignment: any) => {
+                  const userId = assignment.user_id;
+                  if (!acc[userId]) {
+                    acc[userId] = {
+                      user: assignment.users,
+                      assignments: []
+                    };
+                  }
+                  acc[userId].assignments.push(assignment);
+                  return acc;
+                }, {});
+
+                const userGroups = Object.values(userAssignments);
+                
+                if (userGroups.length === 0) {
+                  return (
+                    <div className="text-center text-muted-foreground p-4">
+                      <UserOutlined className="text-2xl mb-2" />
+                      <div>No assignments found</div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {assignment.users?.role}
+                  );
+                }
+
+                return userGroups.map((userGroup: any, index: number) => {
+                  const { user, assignments } = userGroup;
+                  const primaryAssignment = assignments.find((a: any) => a.is_primary);
+                  const secondaryAssignments = assignments.filter((a: any) => !a.is_primary);
+                  
+                  return (
+                    <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border">
+                      <Avatar
+                        src={user?.avatar_url}
+                        icon={<UserOutlined />}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">
+                            {user?.full_name}
+                          </span>
+                          
+                          {/* Primary Assignment Tag */}
+                          {primaryAssignment && (
+                            <Tag color="blue">
+                              Primary Worker
+                            </Tag>
+                          )}
+                          
+                          {/* Secondary Assignment Tags */}
+                          {secondaryAssignments.map((secAssignment: any, secIndex: number) => {
+                            if (task.status === "pending" && task.pending_reason) {
+                              return (
+                                <Tag key={secIndex} color="orange">
+                                  Handling {task.pending_reason.replace("_", " ")}
+                                </Tag>
+                              );
+                            } else if (task.status === "review") {
+                              return (
+                                <Tag key={secIndex} color="purple">
+                                  Reviewer
+                                </Tag>
+                              );
+                            } else if (task.status === "completed" || task.status === "delivered") {
+                              return (
+                                <Tag key={secIndex} color="green">
+                                  Reviewed & Approved
+                                </Tag>
+                              );
+                            } else {
+                              return (
+                                <Tag key={secIndex} color="default">
+                                  Secondary
+                                </Tag>
+                              );
+                            }
+                          })}
+                        </div>
+                        
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {user?.role}
+                        </div>
+                        
+                        {/* Assignment Context Details */}
+                        {assignments.length > 1 && (
+                          <div className="text-xs mt-2 space-y-1">
+                            {primaryAssignment && (
+                              <div className="text-blue-600">
+                                {(task.status === "completed" || task.status === "delivered") 
+                                  ? "• Completed the task work" 
+                                  : "• Primary assignee for task execution"}
+                              </div>
+                            )}
+                            {secondaryAssignments.map((secAssignment: any, secIndex: number) => (
+                              <div key={secIndex} className="text-orange-600">
+                                {task.status === "pending" && task.pending_reason && (
+                                  `• Handling ${task.pending_reason.replace("_", " ")} issue`
+                                )}
+                                {task.status === "review" && (
+                                  "• Assigned for review and approval"
+                                )}
+                                {(task.status === "completed" || task.status === "delivered") && (
+                                  "• Reviewed and approved the task"
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Single assignment context */}
+                        {assignments.length === 1 && (
+                          <div className="text-xs mt-1">
+                            {!primaryAssignment && task.status === "pending" && task.pending_reason && (
+                              <div className="text-orange-600">
+                                Handling: {task.pending_reason.replace("_", " ")}
+                              </div>
+                            )}
+                            {!primaryAssignment && task.status === "review" && (
+                              <div className="text-purple-600">
+                                Reviewing task for approval
+                              </div>
+                            )}
+                            {primaryAssignment && (task.status === "completed" ) && (
+                              <div className="text-green-600">
+                                Task completed - awaiting payment processing
+                              </div>
+                            )}
+                            {primaryAssignment && (task.status === "delivered" ) && (
+                              <div className="text-green-600">
+                                Task Delivered - payment processed
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-              {task.task_assignments?.length === 0 && (
-                <div className="text-center text-muted-foreground">
-                  Unassigned
-                </div>
-              )}
+                  );
+                });
+              })()}
             </Space>
           </Card>
 
@@ -1251,7 +1757,7 @@ export default function TaskDetail() {
               value={pendingReason}
               onChange={(v) => setPendingReason(v)}
               options={[
-                { label: "Review", value: "review" },
+                // { label: "Review", value: "review" },
                 { label: "Data Missing", value: "data_missing" },
                 { label: "Clarity Needed", value: "clarity_needed" },
               ]}
@@ -1268,7 +1774,7 @@ export default function TaskDetail() {
           </div>
         </Space>
       </Modal>
-      
+
       {/* Review Done Modal */}
       <Modal
         title="Complete Review"
@@ -1309,6 +1815,83 @@ export default function TaskDetail() {
               required
             />
           </div>
+        </Space>
+      </Modal>
+
+      {/* Reassign Task Modal */}
+      <Modal
+        title="Reassign Task"
+        open={reassignModalOpen}
+        onOk={handleReassignTask}
+        onCancel={() => {
+          setReassignModalOpen(false);
+          setSelectedUserId(undefined);
+        }}
+        okText="Reassign"
+        confirmLoading={loadingUsers}
+      >
+        <Space direction="vertical" className="w-full">
+          <div>
+            <div className="mb-2 font-medium">Current Assignee</div>
+            {task?.task_assignments
+              ?.filter((a: any) => a.is_active)
+              .map((assignment: any) => (
+                <div
+                  key={assignment.user_id}
+                  className="flex items-center gap-3 mb-4 p-2 bg-gray-50 rounded"
+                >
+                  <Avatar
+                    src={assignment.users?.avatar_url}
+                    icon={<UserOutlined />}
+                  />
+                  <div>
+                    <div className="font-medium">
+                      {assignment.users?.full_name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {assignment.users?.role}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            {task?.task_assignments?.filter((a: any) => a.is_active).length ===
+              0 && (
+              <div className="text-muted-foreground mb-4">
+                No current assignee
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="mb-2 font-medium">Select New Assignee</div>
+            <Select
+              className="w-full"
+              placeholder="Select a user"
+              value={selectedUserId}
+              onChange={(v) => setSelectedUserId(v)}
+              loading={loadingUsers}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? "")
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+              options={availableUsers.map((user) => ({
+                label: `${user.full_name} (${user.role}) - ${
+                  user.current_task_count || 0
+                } tasks`,
+                value: user.id,
+              }))}
+            />
+          </div>
+          {selectedUserId && (
+            <div className="mt-2 p-3 bg-blue-50 rounded">
+              <div className="text-sm">
+                <strong>Note:</strong> The task will be reassigned to the
+                selected user. The current assignee will be notified about this
+                change.
+              </div>
+            </div>
+          )}
         </Space>
       </Modal>
     </div>

@@ -80,7 +80,7 @@ export class AutoAssignmentService {
         };
       }
 
-      // 5. Create the assignment (without assignment_type to avoid enum issues)
+      // 5. Create the assignment as primary (without assignment_type to avoid enum issues)
       const { error: assignError } = await supabase
         .from("task_assignments")
         .insert({
@@ -88,6 +88,7 @@ export class AutoAssignmentService {
           user_id: bestMember.id,
           assigned_by: criteria.assignedBy,
           is_active: true,
+          is_primary: true,
         });
 
       if (assignError) {
@@ -180,7 +181,7 @@ export class AutoAssignmentService {
         .eq("task_id", taskId)
         .eq("is_active", true);
 
-      // Create new assignment (without assignment_type to avoid enum issues)
+      // Create new assignment as secondary for pending issues (without assignment_type to avoid enum issues)
       const { error: assignError } = await supabase
         .from("task_assignments")
         .insert({
@@ -188,6 +189,7 @@ export class AutoAssignmentService {
           user_id: targetMember.id,
           assigned_by: assignedBy,
           is_active: true,
+          is_primary: false, // Secondary assignment for handling pending issues
         });
 
       if (assignError) throw assignError;
