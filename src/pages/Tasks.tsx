@@ -62,6 +62,52 @@ export default function Tasks() {
   useEffect(() => {
     fetchTasks();
     fetchTaskTemplates();
+
+    // Set up real-time subscription to tasks table
+    const channel = supabase
+      .channel("tasks-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "tasks",
+        },
+        (payload) => {
+          console.log("New task inserted:", payload.new);
+          fetchTasks(); // Refresh tasks when a new task is added
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tasks",
+        },
+        (payload) => {
+          console.log("Task updated:", payload.new);
+          fetchTasks(); // Refresh tasks when a task is updated
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "tasks",
+        },
+        (payload) => {
+          console.log("Task deleted:", payload.old);
+          fetchTasks(); // Refresh tasks when a task is deleted
+        }
+      )
+      .subscribe();
+
+    // Clean up subscription on component unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchTasks = async () => {
@@ -90,6 +136,17 @@ export default function Tasks() {
       setLoading(false);
     }
   };
+
+  // Expose refresh function so other components can trigger an update
+  useEffect(() => {
+    // This will make fetchTasks globally available
+    (window as any).refreshTasks = fetchTasks;
+
+    // Clean up function when component unmounts
+    return () => {
+      delete (window as any).refreshTasks;
+    };
+  }, [fetchTasks]);
 
   const fetchTaskTemplates = async () => {
     const { data } = await supabase.from("task_templates").select("id,name");
@@ -374,6 +431,14 @@ export default function Tasks() {
               Create Task
             </Button>
           )}
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchTasks}
+            size="large"
+            title="Refresh Tasks"
+          >
+            Refresh
+          </Button>
         </Space>
       </div>
 

@@ -266,7 +266,7 @@ CREATE POLICY "Users can manage their own notification preferences" ON user_noti
 CREATE POLICY "Users can view all presence data" ON user_presence
     FOR SELECT USING (true);
 
-CREATE POLICY "Users can update their own presence" ON user_presence
+CREATE POLICY "Users can insert their own presence" ON user_presence
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own presence" ON user_presence

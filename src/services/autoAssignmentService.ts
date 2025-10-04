@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { NotificationService } from "./notificationService";
 
 export interface AssignmentCriteria {
   teamId: string;
@@ -102,21 +101,8 @@ export class AutoAssignmentService {
         .update({ status: "assigned" })
         .eq("id", taskId);
 
-      // 7. Get task details for notification
-      const { data: taskData } = await supabase
-        .from("tasks")
-        .select("title")
-        .eq("id", taskId)
-        .single();
-
-      // 8. Send notification to assigned user
-      if (taskData) {
-        await NotificationService.notifyTaskAssignment(
-          bestMember.id,
-          taskId,
-          taskData.title
-        );
-      }
+      // Note: Task assignment notification is automatically created by database trigger
+      // No need to manually create notification here to avoid duplicates
 
       return {
         success: true,
