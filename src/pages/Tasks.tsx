@@ -121,6 +121,8 @@ export default function Tasks() {
           created_by_user:users!tasks_created_by_fkey(full_name),
           task_assignments(
             user_id,
+            is_active,
+            is_primary,
             users!task_assignments_user_id_fkey(full_name)
           ),
           task_templates(name)
@@ -202,7 +204,7 @@ export default function Tasks() {
     const matchesTemplate =
       !templateFilter || task.template_id === templateFilter;
 
-    // "My Tasks" filter - show only tasks assigned to current user
+    // "My Tasks" filter - show tasks where current user is an active assignee
     const matchesMyTasks =
       !showMyTasksOnly ||
       task.task_assignments?.some(
@@ -241,14 +243,14 @@ export default function Tasks() {
   });
 
   const columns = [
-    {
-      title: "Task ID",
-      dataIndex: "id",
-      key: "id",
-      render: (id: string) => (
-        <span className="font-mono text-xs">{id.slice(0, 8)}</span>
-      ),
-    },
+    // {
+    //   title: "Task ID",
+    //   dataIndex: "id",
+    //   key: "id",
+    //   render: (id: string) => (
+    //     <span className="font-mono text-xs">{id.slice(0, 8)}</span>
+    //   ),
+    // },
     {
       title: "Title",
       dataIndex: "title",

@@ -1,12 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Select, Button, Tag, DatePicker, Space, Spin, Empty } from 'antd';
-import { ZoomInOutlined, ZoomOutOutlined, ReloadOutlined } from '@ant-design/icons';
-import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
-import dayjs from 'dayjs';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Select, Button, Tag, DatePicker, Space, Spin, Empty } from "antd";
+import {
+  ZoomInOutlined,
+  ZoomOutOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import dayjs from "dayjs";
+import { Loader2 } from "lucide-react";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -43,162 +47,181 @@ export default function GanttChart() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [teamFilter, setTeamFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [assigneeFilter, setAssigneeFilter] = useState('all');
-  
+  const [teamFilter, setTeamFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+
   const today = dayjs();
   const [dateRange, setDateRange] = useState([
-    dayjs().subtract(5, 'day'),
-    dayjs().add(12, 'day')
+    dayjs().subtract(5, "day"),
+    dayjs().add(12, "day"),
   ]);
-  
+
   const startDate = dateRange[0];
   const endDate = dateRange[1];
-  const totalDays = endDate.diff(startDate, 'day') + 1;
-  const dates = Array.from({ length: totalDays }, (_, i) => startDate.add(i, 'day'));
+  const totalDays = endDate.diff(startDate, "day") + 1;
+  const dates = Array.from({ length: totalDays }, (_, i) =>
+    startDate.add(i, "day")
+  );
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      
+
       try {
         // Fetch teams
         const { data: teamsData, error: teamsError } = await supabase
-          .from('teams')
-          .select('*')
-          .eq('is_active', true);
-          
+          .from("teams")
+          .select("*")
+          .eq("is_active", true);
+
         if (teamsError) throw teamsError;
         setTeams(teamsData || []);
-        
+
         // Fetch users
         const { data: usersData, error: usersError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('is_active', true);
-          
+          .from("users")
+          .select("*")
+          .eq("is_active", true);
+
         if (usersError) throw usersError;
         setUsers(usersData || []);
-        
+
         // Fetch tasks with team and assignee information
         const { data: tasksData, error: tasksError } = await supabase
-          .from('tasks')
-          .select(`
+          .from("tasks")
+          .select(
+            `
             *,
             teams:team_id(name),
             task_assignments(
               users:user_id(full_name)
             )
-          `)
-          .order('created_at', { ascending: false });
-          
+          `
+          )
+          .order("created_at", { ascending: false });
+
         if (tasksError) throw tasksError;
         setTasks(tasksData || []);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
-  
+
   const calculateProgress = (task: Task) => {
     switch (task.status) {
-      case 'not_started': return 0;
-      case 'assigned': return 10;
-      case 'in_progress': return 40;
-      case 'pending': return 60;
-      case 'review': return 80;
-      case 'completed': 
-      case 'delivered': return 100;
-      default: return 0;
+      case "not_started":
+        return 0;
+      case "assigned":
+        return 10;
+      case "in_progress":
+        return 40;
+      case "pending":
+        return 60;
+      case "review":
+        return 80;
+      case "completed":
+      case "delivered":
+        return 100;
+      default:
+        return 0;
     }
   };
-  
+
   const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
-      if (teamFilter !== 'all' && task.team_id !== teamFilter) return false;
-      if (statusFilter !== 'all' && task.status !== statusFilter) return false;
-      if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
-      
-      const assignee = task.task_assignments.length > 0 
-        ? task.task_assignments[0].users?.full_name || 'Unassigned'
-        : 'Unassigned';
-        
-      if (assigneeFilter !== 'all' && assignee !== assigneeFilter) return false;
+    return tasks.filter((task) => {
+      if (teamFilter !== "all" && task.team_id !== teamFilter) return false;
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
+      if (priorityFilter !== "all" && task.priority !== priorityFilter)
+        return false;
+
+      const assignee =
+        task.task_assignments.length > 0
+          ? task.task_assignments[0].users?.full_name || "Unassigned"
+          : "Unassigned";
+
+      if (assigneeFilter !== "all" && assignee !== assigneeFilter) return false;
       return true;
     });
   }, [tasks, teamFilter, statusFilter, priorityFilter, assigneeFilter]);
-  
+
   const handleZoomIn = () => {
     const newZoomLevel = Math.min(zoomLevel * 1.5, 3);
     setZoomLevel(newZoomLevel);
-    
-    const centerDate = startDate.add(totalDays / 2, 'day');
+
+    const centerDate = startDate.add(totalDays / 2, "day");
     const newRange = Math.floor(totalDays / 1.5);
     setDateRange([
-      centerDate.subtract(newRange / 2, 'day'),
-      centerDate.add(newRange / 2, 'day')
+      centerDate.subtract(newRange / 2, "day"),
+      centerDate.add(newRange / 2, "day"),
     ]);
   };
-  
+
   const handleZoomOut = () => {
     const newZoomLevel = Math.max(zoomLevel / 1.5, 0.5);
     setZoomLevel(newZoomLevel);
-    
-    const centerDate = startDate.add(totalDays / 2, 'day');
+
+    const centerDate = startDate.add(totalDays / 2, "day");
     const newRange = Math.floor(totalDays * 1.5);
     setDateRange([
-      centerDate.subtract(newRange / 2, 'day'),
-      centerDate.add(newRange / 2, 'day')
+      centerDate.subtract(newRange / 2, "day"),
+      centerDate.add(newRange / 2, "day"),
     ]);
   };
-  
+
   const handleDateRangeChange = (dates: any) => {
     if (dates && dates.length === 2) {
       setDateRange(dates);
     }
   };
-  
+
   const getTaskPosition = (task: Task) => {
-    const taskStart = dayjs(task.created_at).isBefore(startDate) ? startDate : dayjs(task.created_at);
-    const taskEnd = dayjs(task.due_date || today.add(7, 'day')).isAfter(endDate) ? endDate : dayjs(task.due_date || today.add(7, 'day'));
-    
-    const left = ((taskStart.diff(startDate, 'day') / totalDays) * 100);
-    const width = ((taskEnd.diff(taskStart, 'day') + 1) / totalDays) * 100;
-    
+    const taskStart = dayjs(task.created_at).isBefore(startDate)
+      ? startDate
+      : dayjs(task.created_at);
+    const taskEnd = dayjs(task.due_date || today.add(7, "day")).isAfter(endDate)
+      ? endDate
+      : dayjs(task.due_date || today.add(7, "day"));
+
+    const left = (taskStart.diff(startDate, "day") / totalDays) * 100;
+    const width = ((taskEnd.diff(taskStart, "day") + 1) / totalDays) * 100;
+
     return { left: `${left}%`, width: `${width}%` };
   };
-  
+
   const statusColors: { [key: string]: string } = {
-    not_started: '#d9d9d9',
-    assigned: '#1890ff',
-    in_progress: '#52c41a',
-    pending: '#ff4d4f',
-    review: '#faad14',
-    completed: '#722ed1',
-    delivered: '#eb2f96',
+    not_started: "#d9d9d9",
+    assigned: "#1890ff",
+    in_progress: "#52c41a",
+    pending: "#ff4d4f",
+    review: "#faad14",
+    completed: "#722ed1",
+    delivered: "#eb2f96",
   };
 
   const priorityColors: { [key: string]: string } = {
-    urgent: 'error',
-    high: 'warning',
-    medium: 'processing',
-    low: 'default',
+    urgent: "error",
+    high: "warning",
+    medium: "processing",
+    low: "default",
   };
-  
+
   const assignees = useMemo(() => {
-    const uniqueAssignees = [...new Set(
-      tasks.map(task => 
-        task.task_assignments.length > 0 
-          ? task.task_assignments[0].users?.full_name || 'Unassigned'
-          : 'Unassigned'
-      )
-    )];
+    const uniqueAssignees = [
+      ...new Set(
+        tasks.map((task) =>
+          task.task_assignments.length > 0
+            ? task.task_assignments[0].users?.full_name || "Unassigned"
+            : "Unassigned"
+        )
+      ),
+    ];
     return uniqueAssignees;
   }, [tasks]);
 
@@ -206,16 +229,23 @@ export default function GanttChart() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Gantt Chart</h1>
-          <p className="text-muted-foreground">Visual timeline of all tasks and their progress</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Gantt Chart
+          </h1>
+          <p className="text-muted-foreground">
+            Visual timeline of all tasks and their progress
+          </p>
         </div>
         <div className="flex gap-2">
-          <RangePicker 
-            value={dateRange} 
+          <RangePicker
+            value={dateRange}
             onChange={handleDateRangeChange}
             format="DD/MM/YYYY"
           />
-          <Button icon={<ReloadOutlined />} onClick={() => window.location.reload()}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => window.location.reload()}
+          >
             Refresh
           </Button>
           <Button icon={<ZoomOutOutlined />} onClick={handleZoomOut}>
@@ -228,22 +258,24 @@ export default function GanttChart() {
       </div>
 
       <div className="flex gap-4 mb-4">
-        <Select 
-          placeholder="Filter by Team" 
-          value={teamFilter} 
+        <Select
+          placeholder="Filter by Team"
+          value={teamFilter}
           onChange={setTeamFilter}
           className="w-48"
           allowClear
         >
           <Option value="all">All Teams</Option>
-          {teams.map(team => (
-            <Option key={team.id} value={team.id}>{team.name}</Option>
+          {teams.map((team) => (
+            <Option key={team.id} value={team.id}>
+              {team.name}
+            </Option>
           ))}
         </Select>
-        
-        <Select 
-          placeholder="Filter by Status" 
-          value={statusFilter} 
+
+        <Select
+          placeholder="Filter by Status"
+          value={statusFilter}
           onChange={setStatusFilter}
           className="w-48"
           allowClear
@@ -257,10 +289,10 @@ export default function GanttChart() {
           <Option value="completed">Completed</Option>
           <Option value="delivered">Delivered</Option>
         </Select>
-        
-        <Select 
-          placeholder="Filter by Priority" 
-          value={priorityFilter} 
+
+        <Select
+          placeholder="Filter by Priority"
+          value={priorityFilter}
           onChange={setPriorityFilter}
           className="w-48"
           allowClear
@@ -271,17 +303,19 @@ export default function GanttChart() {
           <Option value="medium">Medium</Option>
           <Option value="low">Low</Option>
         </Select>
-        
-        <Select 
-          placeholder="Filter by Assignee" 
-          value={assigneeFilter} 
+
+        <Select
+          placeholder="Filter by Assignee"
+          value={assigneeFilter}
           onChange={setAssigneeFilter}
           className="w-48"
           allowClear
         >
           <Option value="all">All Assignees</Option>
-          {assignees.map(assignee => (
-            <Option key={assignee} value={assignee}>{assignee}</Option>
+          {assignees.map((assignee) => (
+            <Option key={assignee} value={assignee}>
+              {assignee}
+            </Option>
           ))}
         </Select>
       </div>
@@ -295,8 +329,8 @@ export default function GanttChart() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div 
-                className="w-3 h-3 rounded-full shadow-sm" 
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
                 style={{ backgroundColor: statusColors.not_started }}
               />
               <div>
@@ -304,21 +338,23 @@ export default function GanttChart() {
                 <div className="text-xs text-muted-foreground">New tasks</div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div 
-                className="w-3 h-3 rounded-full shadow-sm" 
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
                 style={{ backgroundColor: statusColors.assigned }}
               />
               <div>
                 <div className="text-xs font-medium">Assigned</div>
-                <div className="text-xs text-muted-foreground">Ready to start</div>
+                <div className="text-xs text-muted-foreground">
+                  Ready to start
+                </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div 
-                className="w-3 h-3 rounded-full shadow-sm" 
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
                 style={{ backgroundColor: statusColors.in_progress }}
               />
               <div>
@@ -326,32 +362,36 @@ export default function GanttChart() {
                 <div className="text-xs text-muted-foreground">Active work</div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div 
-                className="w-3 h-3 rounded-full shadow-sm" 
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
                 style={{ backgroundColor: statusColors.pending }}
               />
               <div>
                 <div className="text-xs font-medium">Pending</div>
-                <div className="text-xs text-muted-foreground">Blocked/waiting</div>
+                <div className="text-xs text-muted-foreground">
+                  Blocked/waiting
+                </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div 
-                className="w-3 h-3 rounded-full shadow-sm" 
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
                 style={{ backgroundColor: statusColors.review }}
               />
               <div>
                 <div className="text-xs font-medium">Review</div>
-                <div className="text-xs text-muted-foreground">Under review</div>
+                <div className="text-xs text-muted-foreground">
+                  Under review
+                </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div 
-                className="w-3 h-3 rounded-full shadow-sm" 
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
                 style={{ backgroundColor: statusColors.completed }}
               />
               <div>
@@ -359,10 +399,10 @@ export default function GanttChart() {
                 <div className="text-xs text-muted-foreground">Work done</div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div 
-                className="w-3 h-3 rounded-full shadow-sm" 
+              <div
+                className="w-3 h-3 rounded-full shadow-sm"
                 style={{ backgroundColor: statusColors.delivered }}
               />
               <div>
@@ -393,12 +433,18 @@ export default function GanttChart() {
                   <div
                     key={idx}
                     className={`flex-1 text-center p-2 border-l border-border ${
-                      date.isSame(today, 'day') ? 'bg-accent/10 font-bold' : ''
+                      date.isSame(today, "day") ? "bg-accent/10 font-bold" : ""
                     }`}
                   >
-                    <div className="text-xs text-muted-foreground">{date.format('MMM')}</div>
-                    <div className="font-medium text-sm">{date.format('DD')}</div>
-                    <div className="text-xs text-muted-foreground">{date.format('ddd')}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {date.format("MMM")}
+                    </div>
+                    <div className="font-medium text-sm">
+                      {date.format("DD")}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {date.format("ddd")}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -407,17 +453,26 @@ export default function GanttChart() {
             {/* Task Rows */}
             {filteredTasks.map((task) => {
               const position = getTaskPosition(task);
-              const assignee = task.task_assignments.length > 0 
-                ? task.task_assignments[0].users?.full_name || 'Unassigned'
-                : 'Unassigned';
-                
+              const assignee =
+                task.task_assignments.length > 0
+                  ? task.task_assignments[0].users?.full_name || "Unassigned"
+                  : "Unassigned";
+
               return (
-                <div key={task.id} className="flex border-b border-border hover:bg-muted/30 transition-colors">
+                <div
+                  key={task.id}
+                  className="flex border-b border-border hover:bg-muted/30 transition-colors"
+                >
                   <div className="w-64 flex-shrink-0 p-4">
                     <div className="font-medium text-sm mb-1">{task.title}</div>
-                    <div className="text-xs text-muted-foreground">{assignee}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {assignee}
+                    </div>
                     <div className="mt-2">
-                      <Tag color={priorityColors[task.priority]} className="text-xs">
+                      <Tag
+                        color={priorityColors[task.priority]}
+                        className="text-xs"
+                      >
                         {task.priority.toUpperCase()}
                       </Tag>
                     </div>
@@ -427,18 +482,20 @@ export default function GanttChart() {
                     <div
                       className="absolute top-0 bottom-0 w-px bg-accent z-10"
                       style={{
-                        left: `${((today.diff(startDate, 'day') / totalDays) * 100)}%`,
+                        left: `${
+                          (today.diff(startDate, "day") / totalDays) * 100
+                        }%`,
                       }}
                     />
-                    
+
                     {/* Task bar */}
                     <div
                       className="absolute h-8 rounded-lg shadow-md flex items-center px-3 cursor-pointer hover:shadow-lg transition-shadow"
                       style={{
                         ...position,
                         backgroundColor: statusColors[task.status],
-                        top: '50%',
-                        transform: 'translateY(-50%)',
+                        top: "50%",
+                        transform: "translateY(-50%)",
                       }}
                     >
                       <div className="text-white text-xs font-medium truncate flex-1">
@@ -455,8 +512,6 @@ export default function GanttChart() {
           </div>
         )}
       </Card>
-
-      
     </div>
   );
 }

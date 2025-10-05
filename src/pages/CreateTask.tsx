@@ -200,10 +200,7 @@ const CreateTask = () => {
         title: formData.title,
         description: formData.description,
         priority: normalizedPriority,
-        difficulty: formData.difficulty as
-          | "easy"
-          | "medium"
-          | "hard",
+        difficulty: formData.difficulty as "easy" | "medium" | "hard",
         estimated_hours: parseFloat(formData.estimated_hours) || 0,
         due_date: normalizedDueDate,
         created_by: userProfile.id,
@@ -270,10 +267,7 @@ const CreateTask = () => {
             task.id,
             {
               teamId: formData.team_id,
-              difficulty: formData.difficulty as
-                | "easy"
-                | "medium"
-                | "hard",
+              difficulty: formData.difficulty as "easy" | "medium" | "hard",
               estimatedHours: parseFloat(formData.estimated_hours) || 0,
               priority: normalizedPriority as "low" | "medium" | "high",
               assignedBy: userProfile.id,
@@ -473,7 +467,7 @@ const CreateTask = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label htmlFor="estimated_hours">Estimated Hours</Label>
                 <Input
                   id="estimated_hours"
@@ -488,7 +482,7 @@ const CreateTask = () => {
                   }
                   placeholder="8"
                 />
-              </div>
+              </div> */}
 
               <div className="space-y-2">
                 <Label htmlFor="due_date">Due Date</Label>

@@ -277,6 +277,9 @@ export default function Dashboard() {
     };
 
     fetchData();
+    // const interval = setInterval(fetchData, 120000); // 2 minutes
+
+    // return () => clearInterval(interval);
   }, []);
 
   if (loading) {

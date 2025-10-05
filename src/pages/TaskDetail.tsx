@@ -434,19 +434,24 @@ export default function TaskDetail() {
 
       // Find the primary assignee and increment their tasks_completed_count
       const primaryAssignee = task.task_assignments?.find(
-        (assignment: any) => assignment.is_primary === true && assignment.is_active
+        (assignment: any) =>
+          assignment.is_primary === true && assignment.is_active
       );
 
       if (primaryAssignee) {
         const { error: userUpdateError } = await supabase
           .from("users")
           .update({
-            tasks_completed_count: (primaryAssignee.users?.tasks_completed_count || 0) + 1,
+            tasks_completed_count:
+              (primaryAssignee.users?.tasks_completed_count || 0) + 1,
           })
           .eq("id", primaryAssignee.user_id);
 
         if (userUpdateError) {
-          console.error("Error updating tasks_completed_count:", userUpdateError);
+          console.error(
+            "Error updating tasks_completed_count:",
+            userUpdateError
+          );
         }
       }
 
@@ -665,19 +670,24 @@ export default function TaskDetail() {
 
       // Find the primary assignee and increment their tasks_delivered_count
       const primaryAssignee = task.task_assignments?.find(
-        (assignment: any) => assignment.is_primary === true && assignment.is_active
+        (assignment: any) =>
+          assignment.is_primary === true && assignment.is_active
       );
 
       if (primaryAssignee) {
         const { error: userUpdateError } = await supabase
           .from("users")
           .update({
-            tasks_delivered_count: (primaryAssignee.users?.tasks_delivered_count || 0) + 1,
+            tasks_delivered_count:
+              (primaryAssignee.users?.tasks_delivered_count || 0) + 1,
           })
           .eq("id", primaryAssignee.user_id);
 
         if (userUpdateError) {
-          console.error("Error updating tasks_delivered_count:", userUpdateError);
+          console.error(
+            "Error updating tasks_delivered_count:",
+            userUpdateError
+          );
         }
       }
 
@@ -939,7 +949,7 @@ export default function TaskDetail() {
         .select("*")
         .eq("task_id", id)
         .order("assigned_at", { ascending: false });
-      
+
       if (fetchAssignErr) {
         console.error("Error fetching assignments:", fetchAssignErr);
         throw fetchAssignErr;
@@ -953,20 +963,23 @@ export default function TaskDetail() {
 
       // Find the original primary worker by looking for the most recent primary assignment that is currently inactive
       // This could be the original assignee who was replaced when the task went to pending
-      const sortedAssignments = [...(assignments || [])].sort((a, b) => 
-        new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime()
+      const sortedAssignments = [...(assignments || [])].sort(
+        (a, b) =>
+          new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime()
       );
-      
+
       // Look for the primary assignee that was deactivated when the task went to pending
       let originalAssignee = sortedAssignments.find(
         (a: any) => a.is_primary === true && !a.is_active
       );
-      
+
       // If no primary assignee found among inactive ones, pick the first primary assignee ever made
       if (!originalAssignee) {
-        originalAssignee = sortedAssignments.find((a: any) => a.is_primary === true);
+        originalAssignee = sortedAssignments.find(
+          (a: any) => a.is_primary === true
+        );
       }
-      
+
       console.log("Original assignee found:", originalAssignee);
 
       // For data_missing pending reason, completely remove all assignments
@@ -1004,19 +1017,23 @@ export default function TaskDetail() {
       // For other pending reasons (review, clarity_needed), restore only the original assignee
       else {
         // For other pending reasons, restore the original assignee.
-        
+
         if (originalAssignee) {
           console.log("Restoring original assignee:", originalAssignee.user_id);
-          
+
           // Step 1: Find all active assignments for this task to track who needs their count updated
-          const { data: activeAssignments, error: activeAssignmentsError } = await supabase
-            .from("task_assignments")
-            .select("user_id")
-            .eq("task_id", id)
-            .eq("is_active", true);
+          const { data: activeAssignments, error: activeAssignmentsError } =
+            await supabase
+              .from("task_assignments")
+              .select("user_id")
+              .eq("task_id", id)
+              .eq("is_active", true);
 
           if (activeAssignmentsError) {
-            console.error("Error fetching active assignments:", activeAssignmentsError);
+            console.error(
+              "Error fetching active assignments:",
+              activeAssignmentsError
+            );
             throw activeAssignmentsError;
           }
 
@@ -1028,12 +1045,18 @@ export default function TaskDetail() {
             .eq("is_active", true);
 
           if (deactivateError) {
-            console.error("Error deactivating current assignments:", deactivateError);
+            console.error(
+              "Error deactivating current assignments:",
+              deactivateError
+            );
             throw deactivateError;
           }
 
           // Step 3: Check if original assignee already has an inactive assignment record
-          const { data: originalAssigneeAssignment, error: findAssignmentError } = await supabase
+          const {
+            data: originalAssigneeAssignment,
+            error: findAssignmentError,
+          } = await supabase
             .from("task_assignments")
             .select("*")
             .eq("task_id", id)
@@ -1041,8 +1064,12 @@ export default function TaskDetail() {
             .limit(1)
             .single(); // Using single() as we expect only one record per user for a task
 
-          if (findAssignmentError && findAssignmentError.code !== 'PGRST116') { // PGRST116 is "Results contain 0 rows"
-            console.error("Error finding original assignee's assignment:", findAssignmentError);
+          if (findAssignmentError && findAssignmentError.code !== "PGRST116") {
+            // PGRST116 is "Results contain 0 rows"
+            console.error(
+              "Error finding original assignee's assignment:",
+              findAssignmentError
+            );
             throw findAssignmentError;
           }
 
@@ -1050,9 +1077,9 @@ export default function TaskDetail() {
           if (originalAssigneeAssignment) {
             const { error: updateError } = await supabase
               .from("task_assignments")
-              .update({ 
+              .update({
                 is_active: true,
-                is_primary: true 
+                is_primary: true,
               })
               .eq("task_id", id)
               .eq("user_id", originalAssignee.user_id);
@@ -1074,12 +1101,18 @@ export default function TaskDetail() {
               });
 
             if (insertError) {
-              console.error("Error creating new assignment for original assignee:", insertError);
+              console.error(
+                "Error creating new assignment for original assignee:",
+                insertError
+              );
               throw insertError;
             }
           }
 
-          console.log("Successfully restored assignment for user:", originalAssignee.user_id);
+          console.log(
+            "Successfully restored assignment for user:",
+            originalAssignee.user_id
+          );
 
           // Step 5: Update task status back to in_progress
           const { error: updateTaskError } = await supabase
@@ -1551,12 +1584,12 @@ export default function TaskDetail() {
                   ? dayjs(task.due_date).format("MMM DD, YYYY")
                   : "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="Estimated Hours">
+              {/* <Descriptions.Item label="Estimated Hours">
                 <ClockCircleOutlined /> {task.estimated_hours || 0} hours
-              </Descriptions.Item>
-              <Descriptions.Item label="Actual Hours">
+              </Descriptions.Item> */}
+              {/* <Descriptions.Item label="Actual Hours">
                 <ClockCircleOutlined /> {task.actual_hours || 0} hours
-              </Descriptions.Item>
+              </Descriptions.Item> */}
               <Descriptions.Item label="Description" span={2}>
                 {task.description || "No description"}
               </Descriptions.Item>
