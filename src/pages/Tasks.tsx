@@ -54,10 +54,7 @@ export default function Tasks() {
     undefined
   );
   const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
-  // "My Tasks" filter - default ON for employees
-  const [showMyTasksOnly, setShowMyTasksOnly] = useState<boolean>(
-    userProfile?.role === "employee" || userProfile?.role === "senior"
-  );
+  // Role-based filtering is now handled automatically without a toggle
 
   useEffect(() => {
     fetchTasks();
@@ -204,12 +201,27 @@ export default function Tasks() {
     const matchesTemplate =
       !templateFilter || task.template_id === templateFilter;
 
-    // "My Tasks" filter - show tasks where current user is an active assignee
-    const matchesMyTasks =
-      !showMyTasksOnly ||
-      task.task_assignments?.some(
-        (a: any) => a.user_id === userProfile?.id && a.is_active
+    // Role-based filtering
+    let matchesUserRole = true;
+    if (userProfile?.role === "employee") {
+      // Employees only see tasks assigned to them (is_primary or is_active)
+      matchesUserRole = task.task_assignments?.some(
+        (a: any) =>
+          a.user_id === userProfile?.id && (a.is_active || a.is_primary)
       );
+    } else if (userProfile?.role === "senior") {
+      // Seniors see their team's tasks
+      // Assuming team members are identified by having the same team_id in users table
+      // This would need to be adjusted based on your actual data structure
+      matchesUserRole = task.task_assignments?.some(
+        (a: any) =>
+          // Senior's own tasks
+          a.user_id === userProfile?.id ||
+          // Or tasks assigned to their team members
+          a.users?.team_id === userProfile?.team_id
+      );
+    }
+    // Admin, manager, and data_collector see all tasks (matchesUserRole remains true)
 
     // Due date filter
     let matchesDueDate = true;
@@ -238,7 +250,7 @@ export default function Tasks() {
       matchesPriority &&
       matchesTemplate &&
       matchesDueDate &&
-      matchesMyTasks
+      matchesUserRole
     );
   });
 
@@ -358,41 +370,41 @@ export default function Tasks() {
         );
       },
     },
-    {
-      title: "Progress",
-      key: "progress",
-      render: (record: any) => {
-        const progress =
-          record.status === "completed" || record.status === "delivered"
-            ? 100
-            : record.status === "in_progress"
-            ? 50
-            : record.status === "assigned"
-            ? 25
-            : 0;
+    // {
+    //   title: "Progress",
+    //   key: "progress",
+    //   render: (record: any) => {
+    //     const progress =
+    //       record.status === "completed" || record.status === "delivered"
+    //         ? 100
+    //         : record.status === "in_progress"
+    //         ? 50
+    //         : record.status === "assigned"
+    //         ? 25
+    //         : 0;
 
-        const dueDateInfo = calculateDueDateInfo(record.due_date);
-        const isCompleted =
-          record.status === "completed" || record.status === "delivered";
-        const strokeColor =
-          dueDateInfo.isOverdue && progress < 100 && !isCompleted
-            ? "#ff4d4f"
-            : undefined;
+    //     const dueDateInfo = calculateDueDateInfo(record.due_date);
+    //     const isCompleted =
+    //       record.status === "completed" || record.status === "delivered";
+    //     const strokeColor =
+    //       dueDateInfo.isOverdue && progress < 100 && !isCompleted
+    //         ? "#ff4d4f"
+    //         : undefined;
 
-        return (
-          <Progress
-            percent={progress}
-            size="small"
-            strokeColor={strokeColor}
-            status={
-              dueDateInfo.isOverdue && progress < 100 && !isCompleted
-                ? "exception"
-                : "normal"
-            }
-          />
-        );
-      },
-    },
+    //     return (
+    //       <Progress
+    //         percent={progress}
+    //         size="small"
+    //         strokeColor={strokeColor}
+    //         status={
+    //           dueDateInfo.isOverdue && progress < 100 && !isCompleted
+    //             ? "exception"
+    //             : "normal"
+    //         }
+    //       />
+    //     );
+    //   },
+    // },
     {
       title: "Actions",
       key: "actions",
@@ -423,7 +435,9 @@ export default function Tasks() {
               Recurring Tasks
             </Button>
           )}
-          {userProfile?.role === "data_collector" && (
+          {(userProfile?.role === "data_collector" ||
+            userProfile?.role === "admin" ||
+            userProfile?.role === "manager") && (
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -514,17 +528,7 @@ export default function Tasks() {
               <Option value="due_soon">Due Soon</Option>
             </Select>
 
-            {(userProfile?.role === "employee" ||
-              userProfile?.role === "senior" ||
-              userProfile?.role === "manager") && (
-              <Button
-                type={showMyTasksOnly ? "primary" : "default"}
-                icon={<UserOutlined />}
-                onClick={() => setShowMyTasksOnly(!showMyTasksOnly)}
-              >
-                {showMyTasksOnly ? "My Tasks" : "All Tasks"}
-              </Button>
-            )}
+            {/* My Tasks button removed - filtering now happens automatically based on role */}
 
             <Badge count={filteredTasks.length} showZero>
               <Button>Total Tasks</Button>

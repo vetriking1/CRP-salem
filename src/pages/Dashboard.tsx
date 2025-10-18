@@ -125,18 +125,18 @@ export default function Dashboard() {
         </Tag>
       ),
     },
-    {
-      title: "Progress",
-      dataIndex: "progress",
-      key: "progress",
-      render: (progress: number) => (
-        <Progress
-          percent={progress}
-          size="small"
-          strokeColor="hsl(var(--accent))"
-        />
-      ),
-    },
+    // {
+    //   title: "Progress",
+    //   dataIndex: "progress",
+    //   key: "progress",
+    //   render: (progress: number) => (
+    //     <Progress
+    //       percent={progress}
+    //       size="small"
+    //       strokeColor="hsl(var(--accent))"
+    //     />
+    //   ),
+    // },
   ];
 
   const leaderboardColumns = [

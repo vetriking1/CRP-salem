@@ -4,8 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Users, Plus, Search, Mail, Shield } from "lucide-react";
 
 interface Team {
@@ -42,6 +44,7 @@ export default function Teams() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
 
   useEffect(() => {
     const fetchTeams = async () => {
@@ -54,7 +57,7 @@ export default function Teams() {
           .select(
             `
             *,
-            users:manager_id(id, full_name, email, role, avatar_url)
+            users:manager_id(id, full_name, email, role, avatar_url, is_active)
           `
           )
           .eq("is_active", true)
@@ -87,9 +90,8 @@ export default function Teams() {
             // Then, fetch the user details for all members
             const { data: usersData, error: usersError } = await supabase
               .from("users")
-              .select("id, full_name, email, role, avatar_url")
-              .in("id", userIds)
-              .eq("is_active", true);
+              .select("id, full_name, email, role, avatar_url, is_active")
+              .in("id", userIds);
 
             if (usersError) throw usersError;
 
@@ -156,6 +158,49 @@ export default function Teams() {
     if (percentage >= 90) return "bg-red-500";
     if (percentage >= 70) return "bg-yellow-500";
     return "bg-green-500";
+  };
+
+  const canEditUserStatus = (userRole: string) => {
+    return (
+      userProfile &&
+      (userProfile.role === "admin" || userProfile.role === "manager")
+    );
+  };
+
+  const updateUserStatus = async (userId: string, isActive: boolean) => {
+    if (!userProfile || !canEditUserStatus(userProfile.role)) {
+      console.error("User does not have permission to update user status");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ is_active: isActive })
+        .eq("id", userId);
+
+      if (error) {
+        console.error("Error updating user status:", error);
+        throw error;
+      }
+
+      // Update the local state to reflect the change
+      setTeams((prevTeams) =>
+        prevTeams.map((team) => ({
+          ...team,
+          members:
+            team.members?.map((member) =>
+              member.user?.id === userId
+                ? { ...member, user: { ...member.user, is_active: isActive } }
+                : member
+            ) || [],
+        }))
+      );
+
+      console.log(`User status updated successfully. New status: ${isActive}`);
+    } catch (error) {
+      console.error("Error updating user status:", error);
+    }
   };
 
   if (loading) {
@@ -267,6 +312,46 @@ export default function Teams() {
                               >
                                 {member.user?.role || "No Role"}
                               </Badge>
+                              {canEditUserStatus(userProfile?.role) && (
+                                <div className="flex items-center gap-2 ml-2">
+                                  <span
+                                    className={`text-xs ${
+                                      member.user?.is_active
+                                        ? "text-green-600"
+                                        : "text-red-600"
+                                    }`}
+                                  >
+                                    {member.user?.is_active
+                                      ? "Active"
+                                      : "Inactive"}
+                                  </span>
+                                  <Switch
+                                    checked={member.user?.is_active}
+                                    onCheckedChange={(checked) =>
+                                      updateUserStatus(
+                                        member.user?.id || "",
+                                        checked
+                                      )
+                                    }
+                                    aria-label={`Toggle active status for ${
+                                      member.user?.full_name || "User"
+                                    }`}
+                                  />
+                                </div>
+                              )}
+                              {!canEditUserStatus(userProfile?.role) && (
+                                <span
+                                  className={`text-xs ml-2 ${
+                                    member.user?.is_active
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  {member.user?.is_active
+                                    ? "Active"
+                                    : "Inactive"}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               <Mail className="h-3 w-3 text-muted-foreground" />

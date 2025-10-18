@@ -57,7 +57,7 @@ const Auth = () => {
           description: "Logged in successfully",
         });
 
-        navigate("/");
+        navigate("/tasks"); 
       }
     } catch (error: any) {
       toast({

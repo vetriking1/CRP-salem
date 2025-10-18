@@ -57,7 +57,9 @@ export default function TaskDetail() {
   >();
   const [pendingNotes, setPendingNotes] = useState<string>("");
   const [uploading, setUploading] = useState(false);
-  const [dataFiles, setDataFiles] = useState<FileList | null>(null);
+  // const [dataFiles, setDataFiles] = useState<FileList | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [attachmentName, setAttachmentName] = useState("");
 
   // Reassignment states
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
@@ -1209,34 +1211,67 @@ export default function TaskDetail() {
     }
   };
 
-  const handleDataFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) setDataFiles(e.target.files);
-  };
+  // COMMENTED OUT: Supabase Storage Upload
+  // const handleDataFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   if (e.target.files) setDataFiles(e.target.files);
+  // };
 
-  const handleUploadDataFiles = async () => {
-    if (!dataFiles || dataFiles.length === 0) return;
+  // const handleUploadDataFiles = async () => {
+  //   if (!dataFiles || dataFiles.length === 0) return;
+  //   if (!userProfile?.id) return;
+  //   setUploading(true);
+  //   try {
+  //     for (let i = 0; i < dataFiles.length; i++) {
+  //       const file = dataFiles[i];
+  //       const ext = file.name.split(".").pop();
+  //       const path = `${userProfile.id}/${id}/${Date.now()}.${ext}`;
+  //       const { error: uploadError } = await supabase.storage
+  //         .from("task-attachments")
+  //         .upload(path, file);
+  //       if (uploadError) throw uploadError;
+  //       await supabase.from("attachments").insert({
+  //         task_id: id,
+  //         file_name: file.name,
+  //         file_path: path,
+  //         file_type: file.type,
+  //         file_size: file.size,
+  //         uploaded_by: userProfile.id,
+  //       });
+  //     }
+  //     toast({ title: "Uploaded", description: "Files uploaded" });
+  //     setDataFiles(null);
+  //     fetchTaskDetails();
+  //   } catch (e: any) {
+  //     toast({ title: "Error", description: e.message, variant: "destructive" });
+  //   } finally {
+  //     setUploading(false);
+  //   }
+  // };
+
+  // NEW: Handle URL submission
+  const handleAddAttachmentUrl = async () => {
+    if (!attachmentUrl.trim() || !attachmentName.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide both file name and URL",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!userProfile?.id) return;
     setUploading(true);
     try {
-      for (let i = 0; i < dataFiles.length; i++) {
-        const file = dataFiles[i];
-        const ext = file.name.split(".").pop();
-        const path = `${userProfile.id}/${id}/${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("task-attachments")
-          .upload(path, file);
-        if (uploadError) throw uploadError;
-        await supabase.from("attachments").insert({
-          task_id: id,
-          file_name: file.name,
-          file_path: path,
-          file_type: file.type,
-          file_size: file.size,
-          uploaded_by: userProfile.id,
-        });
-      }
-      toast({ title: "Uploaded", description: "Files uploaded" });
-      setDataFiles(null);
+      await supabase.from("attachments").insert({
+        task_id: id,
+        file_name: attachmentName,
+        file_path: attachmentUrl,
+        file_type: "url",
+        file_size: 0,
+        uploaded_by: userProfile.id,
+      });
+      toast({ title: "Success", description: "Attachment URL added" });
+      setAttachmentUrl("");
+      setAttachmentName("");
       fetchTaskDetails();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -1245,32 +1280,38 @@ export default function TaskDetail() {
     }
   };
 
-  const handleDownloadAttachment = async (
-    filePath: string,
-    fileName: string
-  ) => {
-    try {
-      const { data, error } = await supabase.storage
-        .from("task-attachments")
-        .download(filePath);
+  // COMMENTED OUT: Supabase Storage Download
+  // const handleDownloadAttachment = async (
+  //   filePath: string,
+  //   fileName: string
+  // ) => {
+  //   try {
+  //     const { data, error } = await supabase.storage
+  //       .from("task-attachments")
+  //       .download(filePath);
 
-      if (error) throw error;
+  //     if (error) throw error;
 
-      const url = URL.createObjectURL(data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to download file",
-        variant: "destructive",
-      });
-    }
+  //     const url = URL.createObjectURL(data);
+  //     const a = document.createElement("a");
+  //     a.href = url;
+  //     a.download = fileName;
+  //     document.body.appendChild(a);
+  //     a.click();
+  //     document.body.removeChild(a);
+  //     URL.revokeObjectURL(url);
+  //   } catch (error: any) {
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to download file",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
+
+  // NEW: Open URL in new tab
+  const handleOpenAttachment = (fileUrl: string) => {
+    window.open(fileUrl, "_blank", "noopener,noreferrer");
   };
 
   // Fetch available users for reassignment
@@ -1940,11 +1981,9 @@ export default function TaskDetail() {
                     <Button
                       icon={<DownloadOutlined />}
                       size="small"
-                      onClick={() =>
-                        handleDownloadAttachment(item.file_path, item.file_name)
-                      }
+                      onClick={() => handleOpenAttachment(item.file_path)}
                     >
-                      Download
+                      Open URL
                     </Button>,
                   ]}
                 >
@@ -1952,7 +1991,12 @@ export default function TaskDetail() {
                     title={item.file_name}
                     description={
                       <div className="text-xs">
-                        <div>{(item.file_size / 1024).toFixed(2)} KB</div>
+                        <div
+                          className="truncate max-w-xs"
+                          title={item.file_path}
+                        >
+                          {item.file_path}
+                        </div>
                         <div>
                           by {item.uploaded_by_user?.full_name} on{" "}
                           {dayjs(item.uploaded_at).format("MMM DD, YYYY")}
@@ -1963,6 +2007,33 @@ export default function TaskDetail() {
                 </List.Item>
               )}
             />
+            {userProfile?.role === "data_collector" && (
+              <div className="mt-4 space-y-3">
+                <Divider />
+                <div className="text-sm font-medium">Add Attachment URL</div>
+                <Input
+                  placeholder="File/Document Name"
+                  value={attachmentName}
+                  onChange={(e) => setAttachmentName(e.target.value)}
+                />
+                <Input
+                  placeholder="https://example.com/file.pdf"
+                  type="url"
+                  value={attachmentUrl}
+                  onChange={(e) => setAttachmentUrl(e.target.value)}
+                />
+                <Button
+                  type="primary"
+                  onClick={handleAddAttachmentUrl}
+                  disabled={
+                    uploading || !attachmentUrl.trim() || !attachmentName.trim()
+                  }
+                >
+                  {uploading ? "Adding..." : "Add Attachment"}
+                </Button>
+              </div>
+            )}
+            {/* COMMENTED OUT: File Upload UI
             {userProfile?.role === "data_collector" && (
               <div className="mt-4 space-y-3">
                 <Divider />
@@ -1977,6 +2048,7 @@ export default function TaskDetail() {
                 </Button>
               </div>
             )}
+            */}
           </Card>
         </div>
       </div>

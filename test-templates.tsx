@@ -1,3 +1,6 @@
+// This is a test file to verify that the template functionality works properly
+// It's not part of the actual implementation, just for testing purposes
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { /* Upload, */ X, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { X, AlertTriangle } from "lucide-react";
 import { AutoAssignmentService } from "@/services/autoAssignmentService";
 import { NotificationService } from "@/services/notificationService";
 import {
@@ -29,20 +33,14 @@ import {
   shouldUpdatePriority,
   type Priority,
 } from "@/utils/dueDateUtils";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 
 interface TaskTemplate {
   id: string;
   name: string;
   description?: string;
+  estimated_hours?: number;
+  default_role?: string;
+  task_team?: string;
 }
 
 interface SubtaskTemplate {
@@ -50,6 +48,7 @@ interface SubtaskTemplate {
   title: string;
   description?: string;
   sort_order?: number;
+  task_template_id?: string;
 }
 
 interface TeamType {
@@ -57,11 +56,11 @@ interface TeamType {
   name: string;
 }
 
-const CreateTask = () => {
+// This is a simplified test version based on the modifications made to CreateTask.tsx
+const TestTemplateFunctionality = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  // const [files, setFiles] = useState<FileList | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
@@ -80,24 +79,19 @@ const CreateTask = () => {
   const [priorityAdjusted, setPriorityAdjusted] = useState(false);
 
   // State for custom task templates
-  const [customTaskTemplates, setCustomTaskTemplates] = useState<
-    TaskTemplate[]
-  >([]);
+  const [customTaskTemplates, setCustomTaskTemplates] = useState<TaskTemplate[]>([]);
   const [newTaskTemplateName, setNewTaskTemplateName] = useState("");
-  const [newTaskTemplateDescription, setNewTaskTemplateDescription] =
-    useState("");
+  const [newTaskTemplateDescription, setNewTaskTemplateDescription] = useState("");
   const [newTaskTemplateHours, setNewTaskTemplateHours] = useState("");
   const [newTaskTemplateRole, setNewTaskTemplateRole] = useState("");
-  const [showCustomTaskTemplateForm, setShowCustomTaskTemplateForm] =
-    useState(false);
-
+  const [showCustomTaskTemplateForm, setShowCustomTaskTemplateForm] = useState(false);
+  
   // State for custom subtask templates
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskDescription, setNewSubtaskDescription] = useState("");
   const [customSubtasks, setCustomSubtasks] = useState<SubtaskTemplate[]>([]);
   const [showCustomSubtaskForm, setShowCustomSubtaskForm] = useState(false);
-  const [selectedTaskTemplateForSubtask, setSelectedTaskTemplateForSubtask] =
-    useState("");
+  const [selectedTaskTemplateForSubtask, setSelectedTaskTemplateForSubtask] = useState("");
 
   useEffect(() => {
     fetchTeams();
@@ -158,17 +152,10 @@ const CreateTask = () => {
     }
   };
 
-  // const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   if (e.target.files) {
-  //     setFiles(e.target.files);
-  //   }
-  // };
-
   const handleRemoveSubtask = (subtaskId: string) => {
     setSubtasks(subtasks.filter((subtask) => subtask.id !== subtaskId));
   };
 
-  // Handle due date change and auto-adjust priority
   const handleDueDateChange = (date: string) => {
     setFormData({ ...formData, due_date: date });
 
@@ -196,18 +183,15 @@ const CreateTask = () => {
     }
   };
 
-  // Handle manual priority change
   const handlePriorityChange = (priority: string) => {
     setFormData({ ...formData, priority });
     setPriorityAdjusted(false); // Reset auto-adjustment flag when manually changed
   };
 
-  // Get due date info for display
   const dueDateInfo = formData.due_date
     ? calculateDueDateInfo(formData.due_date, formData.priority as Priority)
     : null;
 
-  // Function to create a new task template
   const createTaskTemplate = async () => {
     if (!newTaskTemplateName.trim()) {
       toast({
@@ -219,9 +203,7 @@ const CreateTask = () => {
     }
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       // Get user profile
@@ -236,37 +218,35 @@ const CreateTask = () => {
       // Create the new task template
       const { data: newTemplate, error: templateError } = await supabase
         .from("task_templates")
-        .insert([
-          {
-            name: newTaskTemplateName,
-            description: newTaskTemplateDescription,
-            estimated_hours: parseFloat(newTaskTemplateHours) || 0,
-            default_role: newTaskTemplateRole || null,
-            task_team: formData.team_id || null, // Associate with the selected team
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
+        .insert([{
+          name: newTaskTemplateName,
+          description: newTaskTemplateDescription,
+          estimated_hours: parseFloat(newTaskTemplateHours) || 0,
+          default_role: newTaskTemplateRole || null,
+          task_team: formData.team_id || null, // Associate with the selected team
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }])
         .select()
         .single();
 
       if (templateError) throw templateError;
 
       // Add to local state
-      setCustomTaskTemplates((prev) => [...prev, newTemplate]);
-
+      setCustomTaskTemplates(prev => [...prev, newTemplate]);
+      
       // Clear form
       setNewTaskTemplateName("");
       setNewTaskTemplateDescription("");
       setNewTaskTemplateHours("");
       setNewTaskTemplateRole("");
       setShowCustomTaskTemplateForm(false);
-
+      
       toast({
         title: "Success",
         description: "Task template created successfully",
       });
-
+      
       // Refresh the templates list for the selected team
       if (formData.team_id) {
         fetchTaskTemplates(formData.team_id);
@@ -281,7 +261,6 @@ const CreateTask = () => {
     }
   };
 
-  // Function to create a new subtask template
   const createSubtaskTemplate = async () => {
     if (!newSubtaskTitle.trim()) {
       toast({
@@ -302,9 +281,7 @@ const CreateTask = () => {
     }
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       // Get user profile
@@ -319,30 +296,28 @@ const CreateTask = () => {
       // Create the new subtask template
       const { data: newSubtaskTemplate, error: subtaskError } = await supabase
         .from("subtask_templates")
-        .insert([
-          {
-            title: newSubtaskTitle,
-            description: newSubtaskDescription,
-            task_template_id: selectedTaskTemplateForSubtask,
-          },
-        ])
+        .insert([{
+          title: newSubtaskTitle,
+          description: newSubtaskDescription,
+          task_template_id: selectedTaskTemplateForSubtask,
+        }])
         .select()
         .single();
 
       if (subtaskError) throw subtaskError;
 
       // Add to local state
-      setCustomSubtasks((prev) => [...prev, newSubtaskTemplate]);
-
+      setCustomSubtasks(prev => [...prev, newSubtaskTemplate]);
+      
       // Clear form
       setNewSubtaskTitle("");
       setNewSubtaskDescription("");
-
+      
       toast({
         title: "Success",
         description: "Subtask template created successfully",
       });
-
+      
       // Refresh the subtask templates for the selected template
       if (selectedTaskTemplateForSubtask) {
         fetchSubtaskTemplates(selectedTaskTemplateForSubtask);
@@ -377,7 +352,6 @@ const CreateTask = () => {
       if (!userProfile) throw new Error("User profile not found");
 
       // Create task
-      // Insert task with team_id if provided
       // Normalize fields to match DB enums and types
       const normalizedPriority = (
         formData.priority === "urgent" ? "high" : formData.priority
@@ -421,34 +395,6 @@ const CreateTask = () => {
 
         await supabase.from("subtasks").insert(subtasksToCreate);
       }
-
-      // Upload files if any
-      // COMMENTED OUT: Supabase Storage Upload
-      // if (files && files.length > 0) {
-      //   for (let i = 0; i < files.length; i++) {
-      //     const file = files[i];
-      //     const fileExt = file.name.split(".").pop();
-      //     const fileName = `${userProfile.id}/${
-      //       task.id
-      //     }/${Date.now()}.${fileExt}`;
-
-      //     const { error: uploadError } = await supabase.storage
-      //       .from("task-attachments")
-      //       .upload(fileName, file);
-
-      //     if (uploadError) throw uploadError;
-
-      // Create attachment record
-      //     await supabase.from("attachments").insert({
-      //       task_id: task.id,
-      //       file_name: file.name,
-      //       file_path: fileName,
-      //       file_type: file.type,
-      //       file_size: file.size,
-      //       uploaded_by: userProfile.id,
-      //     });
-      //   }
-      // }
 
       // NEW: Store URL directly in attachments table
       if (attachmentUrl.trim() && attachmentName.trim()) {
@@ -561,7 +507,7 @@ const CreateTask = () => {
                   setFormData({
                     ...formData,
                     team_id: value,
-                    template_id: "", // Reset template when team changes
+                    template_id: "",   // Reset template when team changes
                   })
                 }
               >
@@ -591,7 +537,7 @@ const CreateTask = () => {
                     Create Custom Template
                   </Button>
                 </div>
-
+                
                 <Select
                   value={formData.template_id}
                   required
@@ -618,16 +564,12 @@ const CreateTask = () => {
             )}
 
             {/* Custom Task Template Creation Dialog */}
-            <Dialog
-              open={showCustomTaskTemplateForm}
-              onOpenChange={setShowCustomTaskTemplateForm}
-            >
+            <Dialog open={showCustomTaskTemplateForm} onOpenChange={setShowCustomTaskTemplateForm}>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create Custom Task Template</DialogTitle>
                   <DialogDescription>
-                    Define a new task template that can be reused for similar
-                    tasks
+                    Define a new task template that can be reused for similar tasks
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -641,21 +583,19 @@ const CreateTask = () => {
                       required
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="taskTemplateDescription">Description</Label>
                     <Textarea
                       id="taskTemplateDescription"
                       value={newTaskTemplateDescription}
-                      onChange={(e) =>
-                        setNewTaskTemplateDescription(e.target.value)
-                      }
+                      onChange={(e) => setNewTaskTemplateDescription(e.target.value)}
                       placeholder="Enter template description"
                       rows={3}
                     />
                   </div>
-
-                  {/* <div className="grid grid-cols-2 gap-4">
+                  
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="estimatedHours">Estimated Hours</Label>
                       <Input
@@ -686,8 +626,8 @@ const CreateTask = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div> */}
-
+                  </div>
+                  
                   <div className="flex justify-end gap-2 pt-4">
                     <Button
                       type="button"
@@ -702,41 +642,16 @@ const CreateTask = () => {
                     >
                       Cancel
                     </Button>
-                    <Button type="button" onClick={createTaskTemplate}>
+                    <Button
+                      type="button"
+                      onClick={createTaskTemplate}
+                    >
                       Create Template
                     </Button>
                   </div>
                 </div>
               </DialogContent>
             </Dialog>
-
-            {/* {formData.team_id && (
-              <div className="space-y-2">
-                <Label htmlFor="template">Task Template *</Label>
-                <Select
-                  value={formData.template_id}
-                  required
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      template_id: value === "none" ? "" : value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Template</SelectItem>
-                    {taskTemplates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )} */}
 
             {formData.template_id && (
               <div className="space-y-2">
@@ -773,6 +688,61 @@ const CreateTask = () => {
                 </div>
               </div>
             )}
+
+            {/* Custom Subtask Template Creation Dialog */}
+            <Dialog open={showCustomSubtaskForm} onOpenChange={setShowCustomSubtaskForm}>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create Custom Subtask Template</DialogTitle>
+                  <DialogDescription>
+                    Define a new subtask template that can be used in task templates
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="subtaskTitle">Subtask Title *</Label>
+                    <Input
+                      id="subtaskTitle"
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      placeholder="Enter subtask title"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="subtaskDescription">Description</Label>
+                    <Textarea
+                      id="subtaskDescription"
+                      value={newSubtaskDescription}
+                      onChange={(e) => setNewSubtaskDescription(e.target.value)}
+                      placeholder="Enter subtask description"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowCustomSubtaskForm(false);
+                        setNewSubtaskTitle("");
+                        setNewSubtaskDescription("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={createSubtaskTemplate}
+                    >
+                      Create Subtask Template
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
@@ -818,23 +788,6 @@ const CreateTask = () => {
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* <div className="space-y-2">
-                <Label htmlFor="estimated_hours">Estimated Hours</Label>
-                <Input
-                  id="estimated_hours"
-                  type="number"
-                  step="0.5"
-                  value={formData.estimated_hours}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      estimated_hours: e.target.value,
-                    })
-                  }
-                  placeholder="8"
-                />
-              </div> */}
 
               <div className="space-y-2">
                 <Label htmlFor="due_date">Due Date</Label>
@@ -901,32 +854,6 @@ const CreateTask = () => {
               </div>
             </div>
 
-            {/* COMMENTED OUT: File Upload UI
-            <div className="space-y-2">
-              <Label htmlFor="files">Attachments</Label>
-              <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
-                <input
-                  id="files"
-                  type="file"
-                  multiple
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <label htmlFor="files" className="cursor-pointer">
-                  <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-sm text-muted-foreground">
-                    Click to upload files or drag and drop
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {files
-                      ? `${files.length} file(s) selected`
-                      : "No files selected"}
-                  </p>
-                </label>
-              </div>
-            </div>
-            */}
-
             <div className="flex gap-4">
               <Button type="submit" disabled={loading}>
                 {loading ? "Creating..." : "Create Task"}
@@ -942,63 +869,8 @@ const CreateTask = () => {
           </form>
         </CardContent>
       </Card>
-
-      {/* Custom Subtask Template Creation Dialog */}
-      <Dialog
-        open={showCustomSubtaskForm}
-        onOpenChange={setShowCustomSubtaskForm}
-      >
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Custom Subtask Template</DialogTitle>
-            <DialogDescription>
-              Define a new subtask template that can be used in task templates
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="subtaskTitle">Subtask Title *</Label>
-              <Input
-                id="subtaskTitle"
-                value={newSubtaskTitle}
-                onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                placeholder="Enter subtask title"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="subtaskDescription">Description</Label>
-              <Textarea
-                id="subtaskDescription"
-                value={newSubtaskDescription}
-                onChange={(e) => setNewSubtaskDescription(e.target.value)}
-                placeholder="Enter subtask description"
-                rows={3}
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowCustomSubtaskForm(false);
-                  setNewSubtaskTitle("");
-                  setNewSubtaskDescription("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="button" onClick={createSubtaskTemplate}>
-                Create Subtask Template
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
 
-export default CreateTask;
+export default TestTemplateFunctionality;

@@ -56,34 +56,48 @@ export const MainLayout = () => {
     navigate("/auth");
   };
 
-  const menuItems = [
+  // Define all menu items
+  const allMenuItems = [
     {
       key: "/",
       icon: <DashboardOutlined />,
       label: <Link to="/">Dashboard</Link>,
+      roles: ["admin", "manager", "data_collector"],
     },
     {
       key: "/tasks",
       icon: <CheckSquareOutlined />,
       label: <Link to="/tasks">Tasks</Link>,
+      roles: ["admin", "manager", "data_collector", "senior", "employee"],
     },
     {
       key: "/gantt",
       icon: <CalendarOutlined />,
       label: <Link to="/gantt">Gantt Chart</Link>,
+      roles: ["admin", "manager", "data_collector"],
     },
     {
       key: "/kanban",
       icon: <ProjectOutlined />,
       label: <Link to="/kanban">Kanban Board</Link>,
+      roles: ["admin", "manager", "data_collector"],
     },
-
     {
       key: "/team",
       icon: <TeamOutlined />,
       label: <Link to="/team">Team</Link>,
+      roles: ["admin", "manager", "data_collector","senior"],
     },
   ];
+
+  // Filter menu items based on user role
+  const menuItems = allMenuItems.filter(item => {
+    // If user role is not yet loaded, show nothing
+    if (!userProfile?.role) return false;
+    
+    // Check if the user's role is included in the allowed roles for this menu item
+    return item.roles.includes(userProfile.role.toLowerCase());
+  });
 
   //   {
   //   key: '/analytics',
@@ -101,12 +115,12 @@ export const MainLayout = () => {
     {
       type: "divider" as const,
     },
-    {
-      key: "notification-settings",
-      icon: <SettingOutlined />,
-      label: "Notification Settings",
-      onClick: () => navigate("/settings/notifications"),
-    },
+    // {
+    //   key: "notification-settings",
+    //   icon: <SettingOutlined />,
+    //   label: "Notification Settings",
+    //   onClick: () => navigate("/settings/notifications"),
+    // },
     {
       key: "logout",
       icon: <LogoutOutlined />,

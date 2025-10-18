@@ -76,18 +76,19 @@ export async function getDashboardStats() {
 }
 
 export async function getRecentTasks(): Promise<TaskWithAssignee[]> {
-  // First get the recent tasks
+  // Fetch recent tasks with their assignments in a single query
   const { data: tasksData, error: tasksError } = await supabase
     .from('tasks')
     .select(`
-      id,
-      title,
-      description,
-      status,
-      priority,
-      created_at,
-      completed_at,
-      due_date
+      *,
+      created_by_user:users!tasks_created_by_fkey(full_name),
+      task_assignments(
+        user_id,
+        is_active,
+        is_primary,
+        users!task_assignments_user_id_fkey(full_name)
+      ),
+      task_templates(name)
     `)
     .order('created_at', { ascending: false })
     .limit(5);
@@ -97,29 +98,18 @@ export async function getRecentTasks(): Promise<TaskWithAssignee[]> {
     return [];
   }
 
-  // For each task, get the assignee information
-  const tasksWithAssignees: TaskWithAssignee[] = [];
-  
-  for (const task of tasksData) {
-    // Get assignee for this task
-    const { data: assignmentData, error: assignmentError } = await supabase
-      .from('task_assignments')
-      .select(`
-        user:users!inner (full_name)
-      `)
-      .eq('task_id', task.id)
-      .eq('is_active', true)
-      .limit(1)
-      .single(); // Get only the first active assignment
-
-    let assignee = null;
-    if (!assignmentError && assignmentData?.user) {
-      assignee = assignmentData.user;
-    }
+  // Process the tasks to match the format expected by the Dashboard
+  const tasksWithAssignees: TaskWithAssignee[] = tasksData.map(task => {
+    // Get assignee information from task_assignments
+    const assignees = task.task_assignments
+      ?.filter((a: any) => a.is_active)
+      .map((a: any) => a.users);
+    
+    const assignee = assignees && assignees.length > 0 ? assignees[0] : null;
 
     // Calculate progress percentage
     let progress = 0;
-    if (task.status === 'completed') {
+    if (task.status === 'completed' || task.status === 'delivered') {
       progress = 100;
     } else if (task.status === 'in_progress') {
       progress = 60; // Default progress for in-progress tasks
@@ -129,12 +119,12 @@ export async function getRecentTasks(): Promise<TaskWithAssignee[]> {
       progress = 0; // Default for not started
     }
 
-    tasksWithAssignees.push({
+    return {
       ...task,
       assignee,
       progress,
-    });
-  }
+    };
+  });
 
   return tasksWithAssignees;
 }
